@@ -1,0 +1,2817 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tradutor PT &harr; ES</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #161a22;
+    --border: #262c38;
+    --text: #e6e8ef;
+    --muted: #8a92a3;
+    --accent: #5b9dff;
+    /* CB-safe: azul (#60A5FA) / âmbar (#FBBF24) — passa deuteranopia + protanopia.
+       Coblis simulator OK. Verde/laranja antigos eram confusos pra ~6% dos
+       homens adultos. */
+    --pt: #60A5FA;
+    --es: #FBBF24;
+    --error: #ff6b6b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  h1 {
+    font-size: 18px;
+    margin: 0;
+    font-weight: 600;
+  }
+  h1 .badge {
+    font-size: 11px;
+    color: var(--muted);
+    font-weight: 400;
+    margin-left: 8px;
+  }
+  .controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    transition: max-height 0.25s ease, opacity 0.2s ease, margin 0.25s ease;
+    overflow: hidden;
+    max-height: 800px;
+  }
+  body.controls-collapsed .controls {
+    max-height: 0;
+    opacity: 0;
+    margin: 0;
+    pointer-events: none;
+  }
+  /* Status row também recolhe quando collapsed */
+  body.controls-collapsed .status {
+    transition: max-height 0.25s ease, opacity 0.2s ease, margin 0.25s ease, padding 0.25s ease;
+    max-height: 0;
+    opacity: 0;
+    margin: 0;
+    padding: 0;
+    border: none;
+    overflow: hidden;
+  }
+  .header-toggle {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    width: 28px; height: 28px;
+    border-radius: 4px;
+    margin-left: 12px;
+    cursor: pointer;
+    font-size: 11px;
+    transition: transform 0.25s ease, color 0.2s ease;
+    vertical-align: middle;
+  }
+  .header-toggle:hover { color: var(--fg); border-color: var(--accent); }
+  body.controls-collapsed .header-toggle {
+    transform: rotate(180deg);
+  }
+  button {
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 8px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-family: inherit;
+  }
+  button:hover { background: #1d222d; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #0a0d14;
+    font-weight: 600;
+  }
+  button.primary.recording {
+    background: var(--error);
+    border-color: var(--error);
+    color: white;
+  }
+  select {
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 7px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: inherit;
+  }
+  main {
+    padding: 16px 20px;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  .status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+    padding: 10px 12px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .flow-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.25);
+    font-size: 12px;
+    margin-left: auto;
+    transition: color 0.2s ease;
+  }
+  .flow-pill.listening { color: #9aa7b8; }
+  .flow-pill.transcribing { color: #ffb455; animation: flow-pulse 1.1s ease-in-out infinite; }
+  .flow-pill.listo { color: #5fcf80; }
+  .flow-pill.idle { color: #6a6a6a; opacity: 0.6; }
+  .flow-pill.error { color: #ff6b6b; }
+  @keyframes flow-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+  }
+  .latency-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.25);
+    font-size: 11px;
+    font-family: monospace;
+    color: var(--muted);
+    margin-left: 8px;
+  }
+  .latency-chip > span { white-space: nowrap; }
+  .latency-chip .ok { color: #5fcf80; }
+  .latency-chip .warn { color: #ffb455; }
+  .latency-chip .bad { color: #ff6b6b; }
+  .latency-chip .badge {
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+  }
+  .latency-chip .badge.delta { background: #1d4ed8; color: #fff; }
+  .latency-chip .badge.full { background: #444; color: #ddd; }
+  .latency-chip .badge.cache { background: #5fcf80; color: #0a0d14; }
+
+  /* Telemetria — badges compactos com VRAM/Bat/Disk */
+  .telemetry-chip {
+    display: inline-flex; align-items: center; gap: 8px;
+    margin-left: 8px;
+    font-family: monospace; font-size: 11px;
+    padding: 4px 10px; border-radius: 999px;
+    background: rgba(0,0,0,0.25); color: var(--muted);
+  }
+  .telemetry-chip .ok { color: #5fcf80; }
+  .telemetry-chip .warn { color: #ffb455; }
+  .telemetry-chip .bad { color: #ff6b6b; }
+
+  /* Audience chip — count de devices conectados ao /display */
+  .audience-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    margin-left: 8px;
+    font-family: monospace; font-size: 12px;
+    padding: 4px 12px; border-radius: 999px;
+    background: rgba(96,165,250,0.15);
+    color: var(--accent);
+    cursor: pointer;
+    transition: background 0.15s ease;
+    user-select: none;
+  }
+  .audience-chip:hover { background: rgba(96,165,250,0.25); }
+  .audience-chip.has-viewers { background: rgba(95,207,128,0.18); color: #5fcf80; }
+
+  /* Toast (avisos de telemetria) */
+  .toast {
+    position: fixed; top: 16px; left: 50%;
+    transform: translateX(-50%);
+    background: rgba(40,30,30,0.95);
+    color: #fff;
+    padding: 10px 18px;
+    border-radius: 6px;
+    border-left: 3px solid #ff6b6b;
+    font-size: 13px;
+    z-index: 2000;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  }
+  .status .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: background 0.2s;
+  }
+  .status.connected .dot { background: var(--pt); }
+  .status.recording .dot { background: var(--error); animation: pulse 1s infinite; }
+  .status.error .dot { background: var(--error); }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  .mic-meter {
+    flex: 1;
+    height: 6px;
+    background: #1d222d;
+    border-radius: 3px;
+    overflow: hidden;
+    max-width: 200px;
+  }
+  .mic-meter > div {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--pt), var(--es), var(--error));
+    transition: width 0.05s;
+  }
+  #log {
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 12px;
+  }
+  .entry {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 14px;
+    animation: slideIn 0.2s ease-out;
+  }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .entry .meta {
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 6px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .entry .line {
+    margin: 4px 0;
+    line-height: 1.5;
+  }
+  .entry .line .lang {
+    display: inline-block;
+    width: 32px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    vertical-align: top;
+    padding-top: 4px;
+  }
+  .entry .line.src .lang { color: var(--muted); }
+  .entry .line.tgt .lang { color: var(--accent); }
+  .entry .line.pt .lang { color: var(--pt); }
+  .entry .line.es .lang { color: var(--es); }
+  .entry .line .text { white-space: pre-wrap; }
+  /* PT (origem) — controle via CSS vars (configuráveis no painel ⚙) */
+  .entry .line.src .text,
+  .entry .line.pt .text {
+    font-size: var(--pt-size, 13px);
+    color: var(--pt-color, var(--muted));
+    line-height: 1.5;
+    font-weight: var(--pt-weight, 400);
+    display: var(--pt-display, inline);
+  }
+  /* ES (destino) — configurável via CSS vars */
+  .entry .line.tgt .text,
+  .entry .line.es .text {
+    font-size: var(--es-size, 22px);
+    line-height: 1.4;
+    font-weight: var(--es-weight, 500);
+    color: var(--es-color, var(--fg));
+    letter-spacing: 0.005em;
+  }
+  /* Quando PT oculto, a linha inteira some pra não deixar buraco */
+  body.hide-pt .entry .line.src,
+  body.hide-pt .entry .line.pt,
+  body.hide-pt .construction .line.src { display: none; }
+
+  /* ===== Modal de teste de microfone ===== */
+  .mictest-card {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border, #333);
+    border-radius: 10px;
+    padding: 14px 16px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .mictest-card.recommended {
+    border-color: rgba(95, 207, 128, 0.6);
+    background: rgba(95, 207, 128, 0.06);
+  }
+  .mictest-card.priority-1 {
+    border-color: rgba(91, 140, 255, 0.6);
+    background: rgba(91, 140, 255, 0.08);
+  }
+  .mictest-card .row1 {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  }
+  .mictest-card .mic-name {
+    flex: 1;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text, #eee);
+  }
+  .mictest-card .mic-priority-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    font-size: 10.5px;
+    font-weight: 700;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+  .mictest-card.priority-1 .mic-priority-badge {
+    background: rgba(91, 140, 255, 0.25);
+    color: #8db5ff;
+  }
+  .mictest-card.priority-2 .mic-priority-badge {
+    background: rgba(251, 191, 36, 0.18);
+    color: #FBBF24;
+  }
+  .mictest-card .mic-cat {
+    font-size: 11.5px;
+    color: var(--text-muted, #888);
+    font-style: italic;
+  }
+  .mictest-btn {
+    padding: 7px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border, #444);
+    background: var(--panel, #1a1f2e);
+    color: var(--text, #eee);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-width: 110px;
+  }
+  .mictest-btn:hover { background: rgba(91, 140, 255, 0.15); border-color: var(--accent, #5b8cff); }
+  .mictest-btn.recording { background: rgba(255, 107, 107, 0.2); border-color: #ff6b6b; color: #ff6b6b; pointer-events: none; animation: rec-pulse 0.8s ease-in-out infinite; }
+  .mictest-btn.playing { background: rgba(95, 207, 128, 0.2); border-color: #5fcf80; color: #5fcf80; }
+  .mictest-btn:disabled { opacity: 0.4; cursor: default; }
+  @keyframes rec-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.55; }
+  }
+  .mictest-meter {
+    height: 8px; width: 100%;
+    background: rgba(255,255,255,0.06);
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+  }
+  .mictest-meter-fill {
+    height: 100%; width: 0%;
+    background: linear-gradient(to right, #5fcf80 0%, #FBBF24 70%, #ff6b6b 90%);
+    transition: width 0.08s linear;
+  }
+  .mictest-result {
+    display: flex; flex-wrap: wrap; gap: 10px 18px;
+    font-family: monospace;
+    font-size: 12.5px;
+    color: var(--text-muted, #aaa);
+    padding-top: 4px;
+  }
+  .mictest-result .label { color: var(--text-muted, #888); }
+  .mictest-result .val.ok { color: #5fcf80; }
+  .mictest-result .val.warn { color: #FBBF24; }
+  .mictest-result .val.bad { color: #ff6b6b; }
+  .mictest-grade {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 38px; height: 38px;
+    border-radius: 50%;
+    font-size: 18px;
+    font-weight: 800;
+    font-family: "Inter", sans-serif;
+  }
+  .mictest-grade.A { background: #5fcf80; color: #0b0b0c; }
+  .mictest-grade.B { background: #8db5ff; color: #0b0b0c; }
+  .mictest-grade.C { background: #FBBF24; color: #0b0b0c; }
+  .mictest-grade.D { background: #ff6b6b; color: #fff; }
+  .mictest-feedback {
+    font-size: 12.5px;
+    color: var(--text-muted, #aaa);
+    line-height: 1.45;
+    font-style: italic;
+  }
+  .mictest-rank-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    margin-bottom: 6px;
+    background: rgba(255,255,255,0.03);
+  }
+  .mictest-rank-item:first-child {
+    background: rgba(95, 207, 128, 0.12);
+    border: 1px solid rgba(95, 207, 128, 0.4);
+  }
+  .mictest-rank-item .rank-pos {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.08);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 12px;
+  }
+  .mictest-rank-item:first-child .rank-pos {
+    background: #5fcf80;
+    color: #0b0b0c;
+  }
+  .mictest-rank-item .rank-info { flex: 1; }
+  .mictest-rank-item .rank-name { font-weight: 600; font-size: 13px; }
+  .mictest-rank-item .rank-meta { font-size: 11.5px; color: var(--text-muted, #888); }
+  .mictest-rank-item .rank-use-btn {
+    padding: 6px 12px;
+    background: var(--accent, #5b8cff);
+    color: #fff;
+    border: 0; border-radius: 6px;
+    cursor: pointer; font-weight: 600; font-size: 12px;
+  }
+
+  /* ===== Modal de configurações ===== */
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .modal-backdrop[hidden] { display: none; }
+  .modal {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    width: 100%;
+    max-width: 560px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  }
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+  }
+  .modal-header h2 {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 600;
+  }
+  .modal-close {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-size: 22px;
+    cursor: pointer;
+    padding: 0 6px;
+    line-height: 1;
+  }
+  .modal-close:hover { color: var(--fg); }
+  .modal-body { padding: 18px; }
+
+  .cfg-group {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px 14px;
+    margin: 0 0 14px;
+  }
+  .cfg-group legend {
+    padding: 0 6px;
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .cfg-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 12px;
+    margin: 10px 0;
+  }
+  .cfg-row label {
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .cfg-row input[type="range"] {
+    grid-column: 1 / -1;
+    width: 100%;
+    accent-color: var(--accent);
+  }
+  .cfg-row output {
+    font-family: monospace;
+    font-size: 12px;
+    color: var(--fg);
+    background: var(--bg);
+    padding: 2px 8px;
+    border-radius: 4px;
+    justify-self: end;
+  }
+  .cfg-row select {
+    background: var(--bg);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 13px;
+  }
+  .checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    user-select: none;
+    grid-column: 1 / -1;
+  }
+  .checkbox-row input { cursor: pointer; }
+  .cfg-footer {
+    display: flex;
+    justify-content: flex-end;
+    padding-top: 6px;
+    border-top: 1px solid var(--border);
+    margin-top: 14px;
+  }
+  .cfg-footer button {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 6px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .cfg-footer button:hover { color: var(--fg); border-color: var(--accent); }
+  .entry.error {
+    border-color: var(--error);
+    color: var(--error);
+  }
+  .empty-state {
+    text-align: center;
+    color: var(--muted);
+    padding: 40px 20px;
+    font-size: 14px;
+  }
+  .empty-state code {
+    background: var(--panel);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+  }
+  .construction {
+    background: var(--panel);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    padding: 12px 14px;
+    margin-bottom: 16px;
+    display: none;
+  }
+  .construction.visible { display: block; }
+  .construction .label {
+    font-size: 10px;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+    font-weight: 700;
+  }
+  .construction .line {
+    margin: 6px 0;
+    line-height: 1.5;
+  }
+  .construction .line.src .text {
+    font-size: var(--pt-size, 13px);
+    color: var(--pt-color, var(--muted));
+    font-weight: var(--pt-weight, 400);
+  }
+  /* ES em construção: usa --es-size-construction (default ~10% maior que log) */
+  .construction .line.tgt .text {
+    font-size: var(--es-size-construction, 24px);
+    font-weight: var(--es-weight, 500);
+    line-height: 1.4;
+    color: var(--es-color, var(--fg));
+    letter-spacing: 0.005em;
+  }
+  .construction .line .lang {
+    display: inline-block;
+    width: 32px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    vertical-align: top;
+    color: var(--muted);
+    padding-top: 4px;
+  }
+  .construction .line.tgt .lang {
+    padding-top: 8px;  /* alinha melhor com texto ES maior */
+  }
+  .construction .line.src .lang { color: var(--pt); }
+  .construction .line.tgt .lang { color: var(--es); }
+  .construction .text::after {
+    content: "▌";
+    margin-left: 4px;
+    color: var(--accent);
+    animation: caret 0.9s ease-in-out infinite;
+  }
+  @keyframes caret {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.2; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>
+    Tradutor
+    <span class="badge">PT &harr; ES &middot; mic ao vivo</span>
+    <button id="header-toggle" class="header-toggle"
+            title="Recolher/expandir controles (H)" aria-label="Recolher controles">
+      &#9650;
+    </button>
+  </h1>
+  <div class="controls" id="controls-bar">
+    <select id="direction" title="Direção de tradução">
+      <option value="pt-es" selected>PT &rarr; ES</option>
+      <option value="es-pt">ES &rarr; PT</option>
+      <option value="auto">Auto-detect</option>
+    </select>
+    <select id="vad" title="Agressividade do VAD">
+      <option value="0">VAD 0 (permissivo)</option>
+      <option value="1">VAD 1</option>
+      <option value="2" selected>VAD 2 (default)</option>
+      <option value="3">VAD 3 (agressivo)</option>
+    </select>
+    <select id="silence" title="Silêncio pra fechar a frase">
+      <option value="400">Silêncio 0.4s (rápido)</option>
+      <option value="600">Silêncio 0.6s</option>
+      <option value="800" selected>Silêncio 0.8s (default)</option>
+      <option value="1000">Silêncio 1.0s (pausas longas)</option>
+    </select>
+    <select id="audio-source" title="Escolha qual microfone usar. ✓ RECOMENDADO já vem pré-selecionado quando houver um mic externo (sem fio, P2, USB). Mics internos do laptop só funcionam, mas pegam ruído ambiente — evite se possível.">
+      <option value="browser">🌐 Mic do navegador (último recurso — usa o padrão do Windows)</option>
+      <!-- demais opções carregadas via /api/audio-devices -->
+    </select>
+    <span id="mic-hint" style="font-size: 11.5px; color: var(--text-muted, #888); padding: 0 6px; font-style: italic;"></span>
+    <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; user-select: none;" title="Adiciona emojis contextuais (📖 refs bíblicas, 🙏 amén, ✨ aleluya, 🎵 louvor) — default OFF">
+      <input type="checkbox" id="emojis-toggle">
+      Emojis
+    </label>
+    <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; user-select: none;" title="Filtra palavrões/obscenidades em PT e ES — frase inteira é descartada se detectar termo proibido (default ON pra ambiente religioso)">
+      <input type="checkbox" id="profanity-toggle" checked>
+      🛡 Filtro
+    </label>
+    <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; user-select: none;" title="Aplica vocabulário evangélico (hotwords + glossário PT→ES + nomes de livros bíblicos). Desligue se quiser tradução NEUTRA — default OFF.">
+      <input type="checkbox" id="religious-toggle">
+      ✝ Modo religioso
+    </label>
+    <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; user-select: none; background: rgba(167, 139, 250, 0.08); padding: 4px 10px; border-radius: 8px; border: 1px solid rgba(167, 139, 250, 0.2);" title="🎭 MODO INTÉRPRETE: imita intérprete humano de Libras. Display espera a FRASE COMPLETA antes de mostrar (sem texto piscando palavra-a-palavra). Latência ~2s mas leitura MUITO mais confortável. Afeta TODOS os dispositivos /display conectados (audiência inteira). Default ON.">
+      <input type="checkbox" id="interpreter-toggle" checked>
+      🎭 Intérprete
+    </label>
+    <button id="open-browser" title="Abre este painel no navegador padrão (com URL bar, abas — útil pra testar performance)">&#127760; Navegador</button>
+    <button id="open-display" title="Abre a tela pública em outra janela (mande pro projetor)">&#128250; Tela pública</button>
+    <button id="music-btn" title="Buscar música no YouTube e mostrar a letra traduzida em espanhol pra audiência" style="background: rgba(251,191,36,0.12); border-color: rgba(251,191,36,0.35);">&#127925; Música</button>
+    <button id="clear-display" title="Limpa a tela pública (entre seções, etc.)">Limpar tela pública</button>
+    <button id="clear">Limpar log</button>
+    <button id="mic-test-btn" title="Testa cada microfone e dá uma nota. Útil pra decidir qual usar antes da pregação.">&#127908; Testar mic</button>
+    <button id="selftest-btn" title="Auto-teste pré-evento (Whisper + tradutor + estáticos + VRAM)">&#129514; Auto-teste</button>
+    <button id="profiles-open" title="Perfis (configurações salvas por evento)">&#128221;</button>
+    <button id="settings-open" title="Configurações visuais">&#9881;</button>
+    <button id="toggle" class="primary">&#9679; Iniciar</button>
+  </div>
+
+  <!-- Modal de perfis -->
+  <div class="modal-backdrop" id="profiles-backdrop" hidden>
+    <div class="modal" role="dialog">
+      <div class="modal-header">
+        <h2>Perfis salvos</h2>
+        <button id="profiles-close" class="modal-close" aria-label="Fechar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="profiles-list">
+          <!-- preenchido via JS -->
+        </div>
+        <fieldset class="cfg-group" style="margin-top: 14px;">
+          <legend>Novo perfil</legend>
+          <div class="cfg-row" style="grid-template-columns: 1fr auto auto;">
+            <input type="text" id="profile-new-name" placeholder="Ex: Pastor João domingo manhã"
+                   style="background:var(--bg);color:var(--fg);border:1px solid var(--border);border-radius:4px;padding:6px 10px;font-size:13px;">
+            <button id="profile-save" type="button" style="background:var(--accent);color:#0a0d14;border:none;padding:6px 14px;border-radius:4px;font-weight:600;cursor:pointer;">Salvar</button>
+          </div>
+        </fieldset>
+        <div class="cfg-footer" style="justify-content: space-between;">
+          <button id="profile-export" type="button">Exportar todos (JSON)</button>
+          <label style="background:transparent;border:1px solid var(--border);color:var(--muted);padding:6px 14px;border-radius:4px;cursor:pointer;font-size:12px;">
+            Importar JSON
+            <input type="file" id="profile-import" accept="application/json" hidden>
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de configurações -->
+  <div class="modal-backdrop" id="settings-backdrop" hidden>
+    <div class="modal" role="dialog" aria-labelledby="settings-title">
+      <div class="modal-header">
+        <h2 id="settings-title">Configurações visuais</h2>
+        <button id="settings-close" class="modal-close" aria-label="Fechar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <fieldset class="cfg-group">
+          <legend>Texto em ES (destaque)</legend>
+          <div class="cfg-row">
+            <label for="cfg-es-size">Tamanho no log</label>
+            <input type="range" id="cfg-es-size" min="14" max="42" step="1" value="22">
+            <output id="cfg-es-size-val">22px</output>
+          </div>
+          <div class="cfg-row">
+            <label for="cfg-es-size-c">Tamanho em construção</label>
+            <input type="range" id="cfg-es-size-c" min="14" max="48" step="1" value="24">
+            <output id="cfg-es-size-c-val">24px</output>
+          </div>
+          <div class="cfg-row">
+            <label for="cfg-es-weight">Peso (espessura)</label>
+            <select id="cfg-es-weight">
+              <option value="400">Regular (400)</option>
+              <option value="500" selected>Médio (500)</option>
+              <option value="600">Semibold (600)</option>
+              <option value="700">Bold (700)</option>
+            </select>
+          </div>
+        </fieldset>
+
+        <fieldset class="cfg-group">
+          <legend>Texto em PT (origem)</legend>
+          <div class="cfg-row">
+            <label for="cfg-pt-size">Tamanho</label>
+            <input type="range" id="cfg-pt-size" min="10" max="24" step="1" value="13">
+            <output id="cfg-pt-size-val">13px</output>
+          </div>
+          <div class="cfg-row">
+            <label class="checkbox-row">
+              <input type="checkbox" id="cfg-pt-hide">
+              <span>Ocultar PT (mostrar só ES)</span>
+            </label>
+          </div>
+        </fieldset>
+
+        <div class="cfg-footer">
+          <button id="cfg-reset" type="button">Restaurar padrões</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="status" id="status">
+    <span class="dot"></span>
+    <span id="status-text">Desconectado</span>
+    <div class="mic-meter"><div id="meter"></div></div>
+    <span class="flow-pill listening" id="flow-pill">
+      <span id="flow-icon">🎧</span>
+      <span id="flow-text">Aguardando</span>
+    </span>
+    <span class="latency-chip" id="latency-chip" title="Tempo médio das últimas 10 frases — quanto demorou pra ouvir e pra traduzir">
+      <span id="latency-stt">— ouvir</span>
+      <span id="latency-mt">— traduzir</span>
+      <span id="latency-mtsrc"></span>
+    </span>
+    <span class="telemetry-chip" id="telemetry-chip" title="Estado do PC: placa de vídeo, bateria, disco livre">
+      <span id="tel-vram">—</span>
+      <span id="tel-bat">—</span>
+      <span id="tel-disk">—</span>
+    </span>
+    <span class="audience-chip" id="audience-chip" title="Quantas pessoas estão vendo a tradução agora (e quantas no máximo da sessão). Clique pra ver detalhes.">
+      👥 <span id="aud-now">0</span> vendo
+      <span id="aud-peak" style="color:var(--muted)">· máx <span id="aud-peak-val">0</span></span>
+    </span>
+  </div>
+
+  <!-- Modal de audiência -->
+  <div class="modal-backdrop" id="audience-backdrop" hidden>
+    <div class="modal" role="dialog">
+      <div class="modal-header">
+        <h2>👥 Audiência conectada</h2>
+        <button id="audience-close" class="modal-close" aria-label="Fechar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="audience-summary" style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;font-family:monospace;font-size:13px;color:var(--muted);">
+          <span>Carregando...</span>
+        </div>
+        <h3 style="font-size:13px;color:var(--accent);text-transform:uppercase;letter-spacing:0.5px;margin:0 0 8px;">Agora online</h3>
+        <div id="audience-list-now"></div>
+        <h3 style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin:18px 0 8px;">Histórico da sessão</h3>
+        <div id="audience-list-history"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de música (buscar YouTube + letra traduzida) -->
+  <div class="modal-backdrop" id="music-backdrop" hidden>
+    <div class="modal" role="dialog" aria-labelledby="music-title" style="max-width: 720px;">
+      <div class="modal-header">
+        <h2 id="music-title">🎵 Música — letra traduzida</h2>
+        <button id="music-close" class="modal-close" aria-label="Fechar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="margin-bottom:12px; color:var(--text-muted,#888); line-height:1.5;">
+          Busque a música no YouTube. Escolha de preferência o <b>vídeo oficial</b>
+          (quase sempre tem legenda = a letra exata). Eu baixo a letra e traduzo pro espanhol.
+        </p>
+        <div style="display:flex; gap:8px; margin-bottom:14px;">
+          <input type="text" id="music-search-input" placeholder="Nome da música + artista..."
+                 style="flex:1; padding:9px 12px; border-radius:8px; border:1px solid var(--border,#444); background:var(--panel,#1a1f2e); color:var(--text,#eee); font-size:14px;">
+          <button id="music-search-btn" class="primary" style="min-width:110px;">🔍 Buscar</button>
+        </div>
+        <div id="music-status" style="font-size:13px; color:var(--text-muted,#888); margin-bottom:10px;"></div>
+        <div id="music-results" style="display:flex; flex-direction:column; gap:8px; max-height:38vh; overflow-y:auto;"></div>
+        <div id="music-preview" style="display:none; margin-top:16px; padding-top:14px; border-top:1px solid var(--border,#333);">
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
+            <strong id="music-preview-title" style="font-size:14px;"></strong>
+            <span id="music-preview-badge" style="font-size:11px; padding:2px 8px; border-radius:999px;"></span>
+            <div style="margin-left:auto; display:flex; gap:8px;">
+              <button id="music-show-btn" class="primary" style="background:#5fcf80; border-color:#5fcf80; color:#0b0b0c;">📺 Mostrar no display</button>
+              <button id="music-hide-btn">✖ Tirar do display</button>
+            </div>
+          </div>
+          <div id="music-preview-lines" style="max-height:30vh; overflow-y:auto; font-size:13px; line-height:1.5;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de teste de microfones -->
+  <div class="modal-backdrop" id="mictest-backdrop" hidden>
+    <div class="modal" role="dialog" aria-labelledby="mictest-title">
+      <div class="modal-header">
+        <h2 id="mictest-title">🎤 Teste de microfones</h2>
+        <button id="mictest-close" class="modal-close" aria-label="Fechar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="margin-bottom: 12px; color: var(--text-muted, #888); line-height: 1.5;">
+          Pra cada microfone, clique <b>"Gravar 5s"</b> e <b>fale uma frase em voz normal</b>
+          (ex: "Boa noite irmãos, hoje vamos falar sobre o livro de Salmos").
+          O sistema vai analisar o áudio e te dar uma nota.
+        </p>
+        <div id="mictest-list" style="display: flex; flex-direction: column; gap: 12px;">
+          <div style="color: var(--text-muted, #888); padding: 12px;">Carregando microfones…</div>
+        </div>
+        <div id="mictest-ranking" style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border, #333); display: none;">
+          <h3 style="font-size: 14px; color: var(--accent, #5b8cff); text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 12px;">🏆 Ranking dos mics testados</h3>
+          <div id="mictest-ranking-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="construction" id="construction">
+    <div class="label">Em construção…</div>
+    <div class="line src">
+      <span class="lang">PT</span>
+      <span class="text" id="construction-src"></span>
+    </div>
+    <div class="line tgt">
+      <span class="lang">ES</span>
+      <span class="text" id="construction-tgt"></span>
+    </div>
+  </div>
+
+  <div id="log">
+    <div class="empty-state" id="empty">
+      <p>Modo apresentação: <strong>PT → ES</strong>. Pastor fala em português, audiência hispanofalante lê na <strong>Tela pública</strong>.</p>
+      <p style="margin-top: 14px;">
+        1. Clique em <strong>📺 Tela pública</strong> (no canto superior direito) — abre `/display` em nova janela. Mande ela pro projetor e aperte <strong>F</strong> pra fullscreen.<br>
+        2. Clique em <strong>● Iniciar</strong> aqui e permita o mic do navegador.<br>
+        3. Fale — a tradução aparece pra audiência em tempo real.
+      </p>
+      <p id="security-warn" style="margin-top: 14px; color: var(--error); display: none;">
+        ⚠ Atenção: esta página <strong>não</strong> está num contexto seguro. O microfone não vai funcionar.
+        Abra <strong>http://localhost:8765</strong> diretamente no Chrome/Edge (fora do preview do Claude Code).
+      </p>
+    </div>
+  </div>
+</main>
+
+<script>
+const TARGET_SR = 16000;
+const FRAME_SIZE = 480;   // 30ms @ 16kHz, alinhado com webrtcvad no servidor
+
+const els = {
+  toggle: document.getElementById("toggle"),
+  clear: document.getElementById("clear"),
+  clearDisplay: document.getElementById("clear-display"),
+  openDisplay: document.getElementById("open-display"),
+  direction: document.getElementById("direction"),
+  vad: document.getElementById("vad"),
+  silence: document.getElementById("silence"),
+  emojisToggle: document.getElementById("emojis-toggle"),
+  profanityToggle: document.getElementById("profanity-toggle"),
+  religiousToggle: document.getElementById("religious-toggle"),
+  interpreterToggle: document.getElementById("interpreter-toggle"),
+  audioSource: document.getElementById("audio-source"),
+  status: document.getElementById("status"),
+  statusText: document.getElementById("status-text"),
+  meter: document.getElementById("meter"),
+  log: document.getElementById("log"),
+  empty: document.getElementById("empty"),
+  construction: document.getElementById("construction"),
+  constructionSrc: document.getElementById("construction-src"),
+  constructionTgt: document.getElementById("construction-tgt"),
+  flowPill: document.getElementById("flow-pill"),
+  flowIcon: document.getElementById("flow-icon"),
+  flowText: document.getElementById("flow-text"),
+};
+
+const FLOW_STATES = {
+  idle:         { icon: "💤", text: "Em pausa" },
+  listening:    { icon: "🎧", text: "Aguardando você falar" },
+  transcribing: { icon: "💬", text: "Captando sua voz" },
+  translating:  { icon: "🌐", text: "Traduzindo…" },
+  listo:        { icon: "✓",  text: "Pronto!" },
+  error:        { icon: "⚠",  text: "Algo deu errado" },
+};
+let flowResetTimer = null;
+function setFlow(state) {
+  const cfg = FLOW_STATES[state] || FLOW_STATES.listening;
+  els.flowPill.className = "flow-pill " + state;
+  els.flowIcon.textContent = cfg.icon;
+  els.flowText.textContent = cfg.text;
+}
+function setFlowBriefly(state, ms, fallback) {
+  setFlow(state);
+  if (flowResetTimer) clearTimeout(flowResetTimer);
+  flowResetTimer = setTimeout(() => setFlow(fallback || "listening"), ms);
+}
+
+let currentPartialSeq = -1;
+
+const latencyHistory = { stt: [], mt: [], mtSource: "" };
+function recordLatency(result) {
+  if (typeof result.stt_s === "number") {
+    latencyHistory.stt.push(result.stt_s * 1000);
+    if (latencyHistory.stt.length > 10) latencyHistory.stt.shift();
+  }
+  if (typeof result.mt_s === "number") {
+    latencyHistory.mt.push(result.mt_s * 1000);
+    if (latencyHistory.mt.length > 10) latencyHistory.mt.shift();
+  }
+  latencyHistory.mtSource = result.mt_source || "";
+  renderLatency();
+}
+function avg(arr) {
+  return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+}
+function levelClass(ms, okBelow, warnBelow) {
+  if (ms < okBelow) return "ok";
+  if (ms < warnBelow) return "warn";
+  return "bad";
+}
+// Formata ms pra leitura humana: <1s mostra "0.85s", >=1s mostra "2.4s"
+function fmtSeconds(ms) {
+  if (ms < 1000) return (ms / 1000).toFixed(2) + "s";
+  return (ms / 1000).toFixed(1) + "s";
+}
+function renderLatency() {
+  const sttMs = avg(latencyHistory.stt);
+  const mtMs = avg(latencyHistory.mt);
+  const sttEl = document.getElementById("latency-stt");
+  const mtEl = document.getElementById("latency-mt");
+  const srcEl = document.getElementById("latency-mtsrc");
+  if (latencyHistory.stt.length === 0) {
+    sttEl.textContent = "— ouvir";
+    mtEl.textContent = "— traduzir";
+    srcEl.innerHTML = "";
+    return;
+  }
+  sttEl.innerHTML = `<span class="${levelClass(sttMs, 250, 600)}">${fmtSeconds(sttMs)}</span> ouvir`;
+  mtEl.innerHTML = `<span class="${levelClass(mtMs, 100, 300)}">${fmtSeconds(mtMs)}</span> traduzir`;
+  const src = latencyHistory.mtSource;
+  if (src) {
+    const isCache = avg(latencyHistory.mt.slice(-1)) < 10;
+    const cls = isCache ? "cache" : (src === "delta" ? "delta" : "full");
+    // Termos amigáveis: cache=já visto, delta=continuação, full=do zero
+    const label = isCache ? "já vista"
+                : src === "delta" ? "continuação"
+                : "do zero";
+    srcEl.innerHTML = `<span class="badge ${cls}">${label}</span>`;
+  }
+}
+
+const state = {
+  ws: null,
+  audioCtx: null,
+  mediaStream: null,
+  workletNode: null,
+  recording: false,
+  // WS reconnect state
+  userStopped: false,
+  reconnectDelayMs: 500,
+  reconnectTimer: null,
+  // OS sleep prevention (wakeLock)
+  wakeLock: null,
+  // Bookkeeping pra replay da última config após reconnect
+  lastConfigSent: null,
+};
+
+async function acquireWakeLock() {
+  if (!("wakeLock" in navigator)) return;
+  try {
+    state.wakeLock = await navigator.wakeLock.request("screen");
+    state.wakeLock.addEventListener("release", () => {
+      console.info("[wakeLock] released by system");
+    });
+    console.info("[wakeLock] acquired — OS não vai hibernar");
+  } catch (e) {
+    console.warn("[wakeLock] falhou:", e);
+  }
+}
+async function releaseWakeLock() {
+  if (state.wakeLock) {
+    try { await state.wakeLock.release(); } catch {}
+    state.wakeLock = null;
+  }
+}
+// Re-adquire wakeLock se o navegador retomar do background (tab oculta solta)
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && state.recording && !state.wakeLock) {
+    acquireWakeLock();
+  }
+});
+
+function reopenWebSocket() {
+  // Reconnect light: só recria o WS, mantém AudioWorklet ativo.
+  const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
+  const wsURL = `${wsProto}//${location.host}/ws`;
+  state.ws = new WebSocket(wsURL);
+  state.ws.binaryType = "arraybuffer";
+
+  state.ws.onopen = () => {
+    setStatus("Conectou de novo — voltei a ouvir", "recording");
+    setFlow("listening");
+    state.reconnectDelayMs = 500;  // reset backoff
+    // Re-aplica config + audio-source
+    sendConfig();
+    if (state.lastConfigSent && state.lastConfigSent.audioSource &&
+        state.lastConfigSent.audioSource !== "browser") {
+      state.ws.send(JSON.stringify({
+        type: "audio-source",
+        source: state.lastConfigSent.audioSource,
+      }));
+    }
+  };
+  state.ws.onmessage = handleWsMessage;
+  state.ws.onerror = (e) => console.warn("ws error", e);
+  state.ws.onclose = () => {
+    if (state.userStopped) return;
+    setStatus(`Sem conexão com o servidor — tentando de novo em ${state.reconnectDelayMs/1000}s`,
+              "error");
+    setFlow("error");
+    state.reconnectTimer = setTimeout(() => {
+      if (!state.userStopped) reopenWebSocket();
+    }, state.reconnectDelayMs);
+    state.reconnectDelayMs = Math.min(state.reconnectDelayMs * 2, 5000);
+  };
+}
+
+// Handler de mensagens WS — extraído pra reuso pelo reopenWebSocket
+function handleWsMessage(event) {
+  try {
+    const data = JSON.parse(event.data);
+    if (data.type === "partial") {
+      showPartial(data);
+      setStatus("Ouvindo — pode falar à vontade", "recording");
+      setFlow("transcribing");
+      recordLatency(data);
+    } else if (data.type === "final") {
+      showFinal(data);
+      setStatus("Ouvindo — pode falar à vontade", "recording");
+      setFlowBriefly("listo", 1400, "listening");
+      recordLatency(data);
+    } else if (data.type === "result") {
+      addEntry(data);
+      setFlowBriefly("listo", 1400, "listening");
+      recordLatency(data);
+    } else if (data.type === "error") {
+      addError(data.msg);
+      setFlow("error");
+    } else if (data.type === "phrase-detected") {
+      if (data.kind === "final" || !data.kind) {
+        setStatus("Captando sua voz...", "recording");
+      }
+      setFlow("transcribing");
+    } else if (data.type === "empty") {
+      setStatus("Ouvindo — pode falar à vontade", "recording");
+      setFlow("listening");
+    } else if (data.type === "ready") {
+      setFlow("listening");
+      // Sincroniza checkbox 🎭 Intérprete com o estado real do servidor
+      // (que pode vir do state.json persistido entre restarts)
+      if (typeof data.display_interpreter_mode === "boolean" && els.interpreterToggle) {
+        els.interpreterToggle.checked = data.display_interpreter_mode;
+      }
+    } else if (data.type === "telemetry") {
+      handleTelemetry(data);
+    } else if (data.type === "content-filtered") {
+      // Frase descartada pelo filtro — só nota discreta pro operador,
+      // NÃO vai pro display público.
+      showToast("filtered-" + Date.now(),
+                `🛡 Frase com conteúdo impróprio bloqueada (${data.lang})`, 3500);
+    }
+  } catch (e) {
+    console.warn("ws msg parse fail", e, event.data);
+  }
+}
+function handleTelemetry(data) {
+  // Placeholder — preenchido por #9 (telemetria panel)
+}
+
+// ===== Header collapse =====
+const HEADER_KEY = "tradutor.header.collapsed";
+function setHeaderCollapsed(on) {
+  document.body.classList.toggle("controls-collapsed", !!on);
+  try { localStorage.setItem(HEADER_KEY, on ? "1" : "0"); } catch {}
+}
+// Restaurar estado salvo no boot
+try {
+  if (localStorage.getItem(HEADER_KEY) === "1") {
+    document.body.classList.add("controls-collapsed");
+  }
+} catch {}
+document.getElementById("header-toggle").addEventListener("click", () => {
+  setHeaderCollapsed(!document.body.classList.contains("controls-collapsed"));
+});
+
+// ===== Self-test =====
+document.getElementById("selftest-btn").addEventListener("click", async () => {
+  const btn = document.getElementById("selftest-btn");
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = "⏳ Testando...";
+  try {
+    const r = await fetch("/selftest");
+    const data = await r.json();
+    const lines = data.checks.map(c => {
+      const icon = c.ok ? "✓" : "✗";
+      const dur = c.duration_ms != null ? ` (${c.duration_ms}ms)` : "";
+      return `${icon} ${c.name}${dur}\n   ${c.msg || ""}`;
+    });
+    const header = data.all_ok ? "✅ TUDO OK" : "⚠ FALHAS DETECTADAS";
+    alert(header + "\n\n" + lines.join("\n\n"));
+  } catch (e) {
+    alert("Erro no self-test: " + e.message);
+  } finally {
+    btn.innerHTML = orig;
+    btn.disabled = false;
+  }
+});
+
+// ===== Painel de audiência (devices conectados ao /display) =====
+async function pollAudience() {
+  try {
+    const r = await fetch("/api/audience");
+    if (!r.ok) return;
+    const data = await r.json();
+    const now = data.connected_now || 0;
+    const peak = data.peak_simultaneous || 0;
+    const unique = data.unique_devices_connected || 0;
+    document.getElementById("aud-now").textContent = unique;
+    document.getElementById("aud-peak-val").textContent = peak;
+    const chip = document.getElementById("audience-chip");
+    chip.classList.toggle("has-viewers", unique > 0);
+    const cels = unique === 1 ? "celular" : "celulares";
+    chip.title = `${unique} ${cels} vendo a tradução agora (em ${now} aba${now !== 1 ? 's' : ''}). Recorde da sessão: ${peak} ao mesmo tempo. Clique pra ver detalhes de cada um.`;
+    // Se modal está aberto, atualiza conteúdo
+    if (!document.getElementById("audience-backdrop").hidden) {
+      renderAudienceDetail(data);
+    }
+  } catch {}
+}
+function renderAudienceDetail(data) {
+  const fmt = (iso) => {
+    try { return new Date(iso).toLocaleTimeString("pt-BR"); } catch { return iso; }
+  };
+  const sum = document.getElementById("audience-summary");
+  sum.innerHTML = `
+    <span>👥 <strong style="color:var(--fg)">${data.unique_devices_connected}</strong> dispositivos agora</span>
+    <span>📊 ${data.connected_now} aba(s) WS abertas</span>
+    <span>📈 Pico: <strong>${data.peak_simultaneous}</strong></span>
+    <span>🗓 Total sessão: <strong>${data.unique_devices_total}</strong></span>
+  `;
+  const renderRow = (d, current=false) => {
+    const ip = (d.ip || "?").substring(0, 20);
+    return `<div style="display:flex;gap:12px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;font-size:13px;${current?'background:rgba(95,207,128,0.08);':''}">
+      <span style="font-family:monospace;color:var(--muted);min-width:90px;">${d.device_id || ""}</span>
+      <span style="min-width:110px;">${d.ua_short || "?"}</span>
+      <span style="color:var(--muted);font-family:monospace;font-size:11px;flex:1;">${ip}</span>
+      <span style="color:var(--muted);font-size:11px;">${current?`${d.tabs||1} aba(s)`:`${d.sessions||1} sessão(ões)`}</span>
+      <span style="color:var(--muted);font-size:11px;">${fmt(current?d.first_seen:d.last_seen)}</span>
+    </div>`;
+  };
+  const nowEl = document.getElementById("audience-list-now");
+  nowEl.innerHTML = (data.devices_now || []).length
+    ? data.devices_now.map(d => renderRow(d, true)).join("")
+    : '<p style="color:var(--muted);font-size:13px;font-style:italic;">Nenhum dispositivo conectado agora.</p>';
+  const histEl = document.getElementById("audience-list-history");
+  // Mostra históricos que NÃO estão online agora
+  const liveIds = new Set((data.devices_now || []).map(d => d.device_id));
+  const offline = (data.history || []).filter(d => !liveIds.has(d.device_id));
+  histEl.innerHTML = offline.length
+    ? offline.map(d => renderRow(d, false)).join("")
+    : '<p style="color:var(--muted);font-size:13px;font-style:italic;">Nenhum dispositivo desconectado na sessão.</p>';
+}
+document.getElementById("audience-chip").addEventListener("click", async () => {
+  document.getElementById("audience-backdrop").hidden = false;
+  await pollAudience();
+});
+document.getElementById("audience-close").addEventListener("click", () => {
+  document.getElementById("audience-backdrop").hidden = true;
+});
+document.getElementById("audience-backdrop").addEventListener("click", (e) => {
+  if (e.target.id === "audience-backdrop") e.target.hidden = true;
+});
+setInterval(pollAudience, 4000);
+setTimeout(pollAudience, 1200);
+
+// ===== Telemetria — polling 5s =====
+const shownToasts = new Set();
+function showToast(key, message, durationMs = 6000) {
+  if (shownToasts.has(key)) return;
+  shownToasts.add(key);
+  const el = document.createElement("div");
+  el.className = "toast";
+  el.textContent = "⚠ " + message;
+  document.body.appendChild(el);
+  setTimeout(() => {
+    el.remove();
+    setTimeout(() => shownToasts.delete(key), 60_000);  // re-mostra após 1min
+  }, durationMs);
+}
+function lvlClass(value, okThr, warnThr, lowerIsWorse = false) {
+  if (lowerIsWorse) {
+    if (value > okThr) return "ok";
+    if (value > warnThr) return "warn";
+    return "bad";
+  } else {
+    if (value < okThr) return "ok";
+    if (value < warnThr) return "warn";
+    return "bad";
+  }
+}
+async function pollTelemetry() {
+  try {
+    const r = await fetch("/api/telemetry");
+    if (!r.ok) return;
+    const t = await r.json();
+    // Placa de vídeo (VRAM)
+    if (typeof t.vram_used_mb === "number" && t.vram_total_mb) {
+      const pct = Math.round((t.vram_used_mb / t.vram_total_mb) * 100);
+      const free = t.vram_free_mb;
+      const el = document.getElementById("tel-vram");
+      el.innerHTML = `🎮 <span class="${lvlClass(pct, 75, 90)}">${pct}%</span>`;
+      el.title = `Placa de vídeo: ${t.vram_used_mb}MB usados de ${t.vram_total_mb}MB (livre: ${free}MB). Se ficar acima de 90% o sistema pode travar.`;
+      if (free < 300) showToast("vram-low", `Placa de vídeo quase cheia (${free}MB livre) — pode travar`);
+    }
+    // Bateria
+    if (typeof t.battery_pct === "number") {
+      const cls = t.on_ac ? "ok" : lvlClass(t.battery_pct, 50, 25, /*lowerIsWorse*/ true);
+      const icon = t.on_ac ? "⚡" : "🔋";
+      const batEl = document.getElementById("tel-bat");
+      batEl.innerHTML = `${icon} <span class="${cls}">${t.battery_pct}%</span>`;
+      batEl.title = t.on_ac
+        ? `Bateria: ${t.battery_pct}% — carregando na tomada`
+        : `Bateria: ${t.battery_pct}% — descarregando! Conecte na tomada`;
+      if (!t.on_ac && t.battery_pct < 20) {
+        showToast("bat-low", `Bateria em ${t.battery_pct}% — conecte na tomada`);
+      }
+    } else {
+      document.getElementById("tel-bat").textContent = "";
+    }
+    // Disco
+    if (typeof t.disk_free_gb === "number") {
+      const cls = lvlClass(t.disk_free_gb, 10, 3, true);
+      const diskEl = document.getElementById("tel-disk");
+      diskEl.innerHTML = `💾 <span class="${cls}">${t.disk_free_gb.toFixed(0)}GB</span>`;
+      diskEl.title = `Espaço livre no disco: ${t.disk_free_gb.toFixed(1)}GB. Abaixo de 2GB começa a dar problema.`;
+      if (t.disk_free_gb < 2) {
+        showToast("disk-low", `Disco quase cheio (${t.disk_free_gb.toFixed(1)}GB livre)`);
+      }
+    }
+  } catch (e) {
+    // Servidor inacessível — ignora silenciosamente (auto-reconnect cuida)
+  }
+}
+setInterval(pollTelemetry, 5000);
+setTimeout(pollTelemetry, 1500);  // 1ª chamada após boot
+
+// ===== Hotkeys globais =====
+const HOTKEYS_HELP = [
+  { combo: "F1", desc: "Panic — display fica preto", action: "panic" },
+  { combo: "Space", desc: "Pausa/retoma gravação", action: "toggle-pause" },
+  { combo: "Ctrl+M", desc: "Mute 5s (não traduz próximas frases)", action: "mute-5s" },
+  { combo: "Ctrl+L", desc: "Limpar tela pública", action: "clear-display" },
+  { combo: "Ctrl+Shift+R", desc: "Reset hard (limpa tudo)", action: "reset" },
+  { combo: "H", desc: "Recolher/expandir menu superior", action: "toggle-header" },
+  { combo: "?", desc: "Mostra esta ajuda", action: "help" },
+];
+
+let panicActive = false;
+let muteUntil = 0;
+
+function showHotkeyHelp() {
+  const lines = HOTKEYS_HELP.map(h => `${h.combo.padEnd(14)} — ${h.desc}`).join("\n");
+  alert("Atalhos:\n\n" + lines);
+}
+
+function sendWsCommand(payload) {
+  if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+    state.ws.send(JSON.stringify(payload));
+  }
+}
+
+function togglePanic() {
+  panicActive = !panicActive;
+  sendWsCommand({ type: "panic", on: panicActive });
+  if (panicActive) {
+    setStatus("⚠ Tela escondida — audiência não está vendo nada", "error");
+    setFlow("error");
+  } else {
+    setStatus("Tela voltou a aparecer", "recording");
+    setFlow("transcribing");
+  }
+}
+
+function togglePause() {
+  if (!state.recording) {
+    // Não tá gravando — Space inicia
+    els.toggle.click();
+    return;
+  }
+  // Pausa = stop sem soltar wakelock. Aqui simples: alterna o botão.
+  els.toggle.click();
+}
+
+function mute5s() {
+  muteUntil = Date.now() + 5000;
+  sendWsCommand({ type: "mute", duration_ms: 5000 });
+  setStatus("🔇 Microfone mudo por 5s", "error");
+  setTimeout(() => {
+    if (Date.now() >= muteUntil && state.recording) {
+      setStatus("Ouvindo — pode falar à vontade", "recording");
+    }
+  }, 5100);
+}
+
+document.addEventListener("keydown", (e) => {
+  // Ignora se o foco está num input/textarea/select (operador digitando)
+  const t = e.target;
+  const inField = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" ||
+                        t.tagName === "SELECT" || t.isContentEditable);
+  if (inField && e.key !== "Escape") return;
+
+  // F1 — panic
+  if (e.key === "F1") {
+    e.preventDefault();
+    togglePanic();
+    return;
+  }
+  // Space — pause/resume (só se não tiver foco em botão)
+  if (e.key === " " && t.tagName !== "BUTTON") {
+    e.preventDefault();
+    togglePause();
+    return;
+  }
+  // Ctrl+M — mute 5s
+  if (e.ctrlKey && (e.key === "m" || e.key === "M")) {
+    e.preventDefault();
+    mute5s();
+    return;
+  }
+  // Ctrl+L — clear display
+  if (e.ctrlKey && (e.key === "l" || e.key === "L")) {
+    e.preventDefault();
+    sendWsCommand({ type: "clear-display" });
+    return;
+  }
+  // Ctrl+Shift+R — reset
+  if (e.ctrlKey && e.shiftKey && (e.key === "r" || e.key === "R")) {
+    e.preventDefault();
+    sendWsCommand({ type: "reset" });
+    els.log.innerHTML = "";
+    clearConstruction();
+    return;
+  }
+  // ? — help
+  if (e.key === "?" || (e.shiftKey && e.key === "/")) {
+    e.preventDefault();
+    showHotkeyHelp();
+    return;
+  }
+  // H — toggle header
+  if (e.key === "h" || e.key === "H") {
+    if (!e.ctrlKey && !e.altKey) {
+      e.preventDefault();
+      setHeaderCollapsed(!document.body.classList.contains("controls-collapsed"));
+      return;
+    }
+  }
+});
+
+function setStatus(label, cls) {
+  els.statusText.textContent = label;
+  els.status.className = "status" + (cls ? " " + cls : "");
+}
+
+function setMeter(level) {
+  // level 0..1
+  els.meter.style.width = Math.min(100, level * 100) + "%";
+}
+
+function clearEmpty() {
+  if (els.empty) {
+    els.empty.remove();
+    els.empty = null;
+  }
+}
+
+function addEntry(result) {
+  clearEmpty();
+  const div = document.createElement("div");
+  div.className = "entry";
+  div.innerHTML = `
+    <div class="meta">
+      <span>${result.ts}</span>
+      <span>${result.src_lang} &rarr; ${result.tgt_lang}</span>
+      <span>audio ${result.duration_s.toFixed(1)}s</span>
+      <span>stt ${result.stt_s.toFixed(1)}s</span>
+      <span>mt ${result.mt_s.toFixed(2)}s</span>
+    </div>
+    <div class="line src ${result.src_lang}">
+      <span class="lang">${result.src_lang}</span>
+      <span class="text"></span>
+    </div>
+    <div class="line tgt ${result.tgt_lang}">
+      <span class="lang">${result.tgt_lang}</span>
+      <span class="text"></span>
+    </div>
+  `;
+  // textContent (não innerHTML) pra evitar XSS de transcrição
+  div.querySelector(".line.src .text").textContent = result.src_text;
+  div.querySelector(".line.tgt .text").textContent = result.tgt_text;
+  els.log.appendChild(div);
+}
+
+function showPartial(result) {
+  clearEmpty();
+  els.construction.classList.add("visible");
+  els.constructionSrc.textContent = result.src_text || "";
+  els.constructionTgt.textContent = result.tgt_text || "";
+  currentPartialSeq = result.seq;
+}
+
+function showFinal(result) {
+  // Frase fechou: vai pro log e a area de construcao limpa
+  addEntry(result);
+  els.construction.classList.remove("visible");
+  els.constructionSrc.textContent = "";
+  els.constructionTgt.textContent = "";
+  currentPartialSeq = -1;
+}
+
+function clearConstruction() {
+  els.construction.classList.remove("visible");
+  els.constructionSrc.textContent = "";
+  els.constructionTgt.textContent = "";
+  currentPartialSeq = -1;
+}
+
+function addError(msg) {
+  clearEmpty();
+  const div = document.createElement("div");
+  div.className = "entry error";
+  div.textContent = "Erro: " + msg;
+  els.log.appendChild(div);
+}
+
+function sendConfig() {
+  if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
+  let src = null, tgt = null;
+  const dir = els.direction.value;
+  if (dir === "pt-es") { src = "pt"; tgt = "es"; }
+  else if (dir === "es-pt") { src = "es"; tgt = "pt"; }
+  state.ws.send(JSON.stringify({
+    type: "config",
+    src, tgt,
+    vad: parseInt(els.vad.value, 10),
+    silence_ms: parseInt(els.silence.value, 10),
+    add_emojis: els.emojisToggle.checked,
+    filter_profanity: els.profanityToggle.checked,
+    apply_religious: els.religiousToggle.checked,
+    interpreter_mode: els.interpreterToggle.checked,
+  }));
+}
+
+function sendClearDisplay() {
+  if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
+    addError("Conecte primeiro (clique em Iniciar) pra enviar comandos.");
+    return;
+  }
+  state.ws.send(JSON.stringify({ type: "clear-display" }));
+}
+
+const WORKLET_CODE = `
+class PCMProcessor extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.buffer = new Int16Array(${FRAME_SIZE});
+    this.bufferIdx = 0;
+    this.peak = 0;
+    this.peakSamples = 0;
+  }
+  process(inputs) {
+    const input = inputs[0];
+    if (!input || !input[0]) return true;
+    const channel = input[0];
+    for (let i = 0; i < channel.length; i++) {
+      const s = Math.max(-1, Math.min(1, channel[i]));
+      this.buffer[this.bufferIdx++] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+      const abs = Math.abs(s);
+      if (abs > this.peak) this.peak = abs;
+      this.peakSamples++;
+      if (this.bufferIdx >= ${FRAME_SIZE}) {
+        this.port.postMessage({ pcm: this.buffer.buffer.slice(0) });
+        this.bufferIdx = 0;
+      }
+    }
+    if (this.peakSamples >= 800) {  // ~50ms @ 16kHz
+      this.port.postMessage({ peak: this.peak });
+      this.peak = 0;
+      this.peakSamples = 0;
+    }
+    return true;
+  }
+}
+registerProcessor("pcm-processor", PCMProcessor);
+`;
+
+async function startRecording() {
+  setStatus("Conectando no servidor...", "");
+  els.toggle.disabled = true;
+
+  const audioSource = els.audioSource.value;
+  const useBrowserMic = (audioSource === "browser");
+
+  try {
+    if (useBrowserMic) {
+      // 0. pre-check de contexto seguro (mic so funciona em HTTPS ou localhost)
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        const isSecure = window.isSecureContext;
+        const origin = location.origin;
+        throw new Error(
+          `Microfone bloqueado pelo navegador. ` +
+          `Contexto seguro: ${isSecure ? "sim" : "NÃO"}. ` +
+          `URL atual: ${origin}. ` +
+          `Solução: abra no navegador direto em http://localhost:8765 ` +
+          `(não dentro do preview do Claude Code). Pra LAN, use HTTPS.`
+        );
+      }
+
+      // 1. mic — AGC e NoiseSuppression do Chrome sao tunados pra conversa
+      // telefonica, nao pra ASR.
+      state.mediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: false,
+          autoGainControl: false,
+        },
+      });
+    }
+
+    if (useBrowserMic) {
+      // 2. AudioContext em 16kHz se possível
+      let ctxOpts = { sampleRate: TARGET_SR };
+      try {
+        state.audioCtx = new AudioContext(ctxOpts);
+      } catch (e) {
+        state.audioCtx = new AudioContext();
+      }
+      const actualSR = state.audioCtx.sampleRate;
+      if (actualSR !== TARGET_SR) {
+        setStatus(`Aviso: SR ${actualSR}Hz != ${TARGET_SR}Hz — usando MediaStreamSource. Pode degradar.`, "error");
+      }
+
+      // 3. AudioWorklet (carregado via Blob URL pra ficar tudo num arquivo)
+      const blob = new Blob([WORKLET_CODE], { type: "application/javascript" });
+      const workletURL = URL.createObjectURL(blob);
+      await state.audioCtx.audioWorklet.addModule(workletURL);
+      URL.revokeObjectURL(workletURL);
+
+      const source = state.audioCtx.createMediaStreamSource(state.mediaStream);
+      state.workletNode = new AudioWorkletNode(state.audioCtx, "pcm-processor");
+      state.workletNode.port.onmessage = (e) => {
+        if (e.data.pcm && state.ws && state.ws.readyState === WebSocket.OPEN) {
+          state.ws.send(e.data.pcm);
+        }
+        if (typeof e.data.peak === "number") {
+          setMeter(e.data.peak);
+        }
+      };
+      source.connect(state.workletNode);
+    }
+
+    // 4. WebSocket (mesmo pra fonte local — recebe traduções)
+    const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
+    const wsURL = `${wsProto}//${location.host}/ws`;
+    state.ws = new WebSocket(wsURL);
+    state.ws.binaryType = "arraybuffer";
+
+    state.userStopped = false;       // permite reconnect automático
+    state.reconnectDelayMs = 500;
+    state.lastConfigSent = { audioSource };
+
+    state.ws.onopen = () => {
+      const label = useBrowserMic ? "Gravando — fale no microfone" :
+                    `Captura local ativa (${audioSource})`;
+      setStatus(label, "recording");
+      sendConfig();
+      // Se fonte local, manda comando pro server iniciar captura
+      if (!useBrowserMic) {
+        state.ws.send(JSON.stringify({
+          type: "audio-source",
+          source: audioSource,
+        }));
+      }
+      state.recording = true;
+      els.toggle.textContent = "■ Parar";
+      els.toggle.classList.add("recording");
+      els.toggle.disabled = false;
+      acquireWakeLock();
+    };
+    state.ws.onmessage = handleWsMessage;
+    state.ws.onerror = (e) => {
+      console.warn("ws error (auto-reconnect ativo)", e);
+    };
+    state.ws.onclose = () => {
+      // Auto-reconnect com exponential backoff (mirror display.html).
+      // Só desligamos o recording de fato se o usuário pediu Stop (state.userStopped).
+      if (state.userStopped) {
+        if (state.recording) stopRecording();
+        setStatus("Desligado", "");
+        setFlow("idle");
+        return;
+      }
+      setStatus(`Conexão caiu — reconectando em ${state.reconnectDelayMs/1000}s...`,
+                "error");
+      setFlow("error");
+      // Schedule reconnect
+      state.reconnectTimer = setTimeout(() => {
+        state.reconnectTimer = null;
+        if (state.userStopped) return;
+        console.info("[ws] tentando reconectar...");
+        try {
+          reopenWebSocket();
+        } catch (e) {
+          console.warn("reopen falhou", e);
+        }
+      }, state.reconnectDelayMs);
+      state.reconnectDelayMs = Math.min(state.reconnectDelayMs * 2, 5000);
+    };
+
+  } catch (err) {
+    console.error(err);
+    addError(err.message || String(err));
+    setStatus("Algo deu errado: " + (err.message || err), "error");
+    els.toggle.disabled = false;
+    await cleanup();
+  }
+}
+
+async function cleanup() {
+  if (state.workletNode) {
+    try { state.workletNode.disconnect(); } catch {}
+    state.workletNode = null;
+  }
+  if (state.audioCtx) {
+    try { await state.audioCtx.close(); } catch {}
+    state.audioCtx = null;
+  }
+  if (state.mediaStream) {
+    state.mediaStream.getTracks().forEach(t => t.stop());
+    state.mediaStream = null;
+  }
+  if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+    state.ws.close();
+  }
+  state.ws = null;
+  setMeter(0);
+}
+
+async function stopRecording() {
+  state.userStopped = true;  // sinaliza pro auto-reconnect: NÃO reconectar
+  if (state.reconnectTimer) {
+    clearTimeout(state.reconnectTimer);
+    state.reconnectTimer = null;
+  }
+  state.recording = false;
+  els.toggle.textContent = "● Iniciar";
+  els.toggle.classList.remove("recording");
+  clearConstruction();
+  await cleanup();
+  await releaseWakeLock();
+  setStatus("Pausado — clique em Iniciar pra voltar", "");
+  setFlow("idle");
+}
+
+els.toggle.addEventListener("click", async () => {
+  if (state.recording) {
+    await stopRecording();
+  } else {
+    await startRecording();
+  }
+});
+
+els.clear.addEventListener("click", () => {
+  els.log.innerHTML = "";
+  clearConstruction();
+});
+
+els.clearDisplay.addEventListener("click", sendClearDisplay);
+
+els.openDisplay.addEventListener("click", () => {
+  const w = window.open("/display", "tradutor-display",
+    "noopener,resizable=yes,scrollbars=no");
+  if (!w) {
+    addError("Pop-up bloqueado. Permita pop-ups pra esse site e tente de novo.");
+  }
+});
+
+// Abrir no navegador padrão — server-side faz webbrowser.open()
+document.getElementById("open-browser").addEventListener("click", async () => {
+  try {
+    const r = await fetch("/api/open-browser", { method: "POST" });
+    const data = await r.json();
+    if (data.opened) {
+      showToast("opened-browser",
+                "🌐 Aberto no navegador padrão — você pode fechar o aplicativo se quiser",
+                4000);
+    } else {
+      addError("Falha ao abrir navegador: " + (data.error || "desconhecido"));
+    }
+  } catch (e) {
+    addError("Falha ao chamar /api/open-browser: " + e.message);
+  }
+});
+
+els.direction.addEventListener("change", sendConfig);
+els.vad.addEventListener("change", sendConfig);
+els.silence.addEventListener("change", sendConfig);
+els.emojisToggle.addEventListener("change", sendConfig);
+els.profanityToggle.addEventListener("change", sendConfig);
+els.religiousToggle.addEventListener("change", sendConfig);
+els.interpreterToggle.addEventListener("change", sendConfig);
+
+// ===== Painel de configurações visuais =====
+const CFG_DEFAULTS = {
+  esSize: 22, esSizeC: 24, esWeight: "500",
+  ptSize: 13, ptHide: false,
+};
+const CFG_KEY = "tradutor.visual.cfg";
+
+function loadCfg() {
+  try {
+    return Object.assign({}, CFG_DEFAULTS, JSON.parse(localStorage.getItem(CFG_KEY) || "{}"));
+  } catch { return { ...CFG_DEFAULTS }; }
+}
+function saveCfg(c) {
+  try { localStorage.setItem(CFG_KEY, JSON.stringify(c)); } catch {}
+}
+function applyCfg(c) {
+  const r = document.documentElement.style;
+  r.setProperty("--es-size", c.esSize + "px");
+  r.setProperty("--es-size-construction", c.esSizeC + "px");
+  r.setProperty("--es-weight", c.esWeight);
+  r.setProperty("--pt-size", c.ptSize + "px");
+  document.body.classList.toggle("hide-pt", !!c.ptHide);
+}
+
+function initSettingsPanel() {
+  const cfg = loadCfg();
+  const $ = id => document.getElementById(id);
+  const bind = (sliderId, valId, key, suffix = "px") => {
+    const el = $(sliderId), out = $(valId);
+    el.value = cfg[key];
+    out.textContent = el.value + suffix;
+    el.addEventListener("input", () => {
+      cfg[key] = Number(el.value);
+      out.textContent = el.value + suffix;
+      applyCfg(cfg); saveCfg(cfg);
+    });
+  };
+  bind("cfg-es-size", "cfg-es-size-val", "esSize");
+  bind("cfg-es-size-c", "cfg-es-size-c-val", "esSizeC");
+  bind("cfg-pt-size", "cfg-pt-size-val", "ptSize");
+
+  const wSel = $("cfg-es-weight");
+  wSel.value = cfg.esWeight;
+  wSel.addEventListener("change", () => {
+    cfg.esWeight = wSel.value;
+    applyCfg(cfg); saveCfg(cfg);
+  });
+
+  const hide = $("cfg-pt-hide");
+  hide.checked = !!cfg.ptHide;
+  hide.addEventListener("change", () => {
+    cfg.ptHide = hide.checked;
+    applyCfg(cfg); saveCfg(cfg);
+  });
+
+  $("cfg-reset").addEventListener("click", () => {
+    Object.assign(cfg, CFG_DEFAULTS);
+    // Re-popula UI
+    $("cfg-es-size").value = cfg.esSize;
+    $("cfg-es-size-val").textContent = cfg.esSize + "px";
+    $("cfg-es-size-c").value = cfg.esSizeC;
+    $("cfg-es-size-c-val").textContent = cfg.esSizeC + "px";
+    $("cfg-pt-size").value = cfg.ptSize;
+    $("cfg-pt-size-val").textContent = cfg.ptSize + "px";
+    wSel.value = cfg.esWeight;
+    hide.checked = !!cfg.ptHide;
+    applyCfg(cfg); saveCfg(cfg);
+  });
+
+  const backdrop = $("settings-backdrop");
+  const openModal = () => backdrop.hidden = false;
+  const closeModal = () => backdrop.hidden = true;
+  $("settings-open").addEventListener("click", openModal);
+  $("settings-close").addEventListener("click", closeModal);
+  backdrop.addEventListener("click", (e) => {
+    if (e.target === backdrop) closeModal();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !backdrop.hidden) closeModal();
+  });
+
+  applyCfg(cfg);  // aplica config salva no boot
+}
+initSettingsPanel();
+
+// ===== Profiles / Scenes =====
+const PROFILES_KEY = "tradutor.profiles";
+function getProfiles() {
+  try { return JSON.parse(localStorage.getItem(PROFILES_KEY) || "[]"); }
+  catch { return []; }
+}
+function setProfiles(arr) {
+  try { localStorage.setItem(PROFILES_KEY, JSON.stringify(arr)); } catch {}
+}
+function currentSettings() {
+  return {
+    direction: els.direction.value,
+    vad: els.vad.value,
+    silence: els.silence.value,
+    audioSource: els.audioSource.value,
+    emojis: els.emojisToggle.checked,
+    visual: loadCfg(),
+  };
+}
+function applyProfile(p) {
+  if (!p) return;
+  if (p.direction) els.direction.value = p.direction;
+  if (p.vad != null) els.vad.value = p.vad;
+  if (p.silence != null) els.silence.value = p.silence;
+  if (p.audioSource) els.audioSource.value = p.audioSource;
+  if (typeof p.emojis === "boolean") els.emojisToggle.checked = p.emojis;
+  if (p.visual) {
+    saveCfg(p.visual);
+    applyCfg(p.visual);
+  }
+  sendConfig();
+}
+
+function renderProfilesList() {
+  const container = document.getElementById("profiles-list");
+  if (!container) return;
+  const profs = getProfiles();
+  if (profs.length === 0) {
+    container.innerHTML = '<p style="color:var(--muted);font-size:13px;font-style:italic;">Nenhum perfil salvo ainda.</p>';
+    return;
+  }
+  container.innerHTML = "";
+  profs.forEach((p, idx) => {
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;align-items:center;gap:8px;padding:10px;border:1px solid var(--border);border-radius:6px;margin-bottom:8px;";
+    const name = document.createElement("div");
+    name.style.cssText = "flex:1;font-size:14px;color:var(--fg);";
+    name.textContent = p.name || "(sem nome)";
+    const desc = document.createElement("div");
+    desc.style.cssText = "color:var(--muted);font-size:11px;font-family:monospace;";
+    desc.textContent = `${p.direction} · VAD ${p.vad} · sil ${p.silence}ms`;
+    const wrap = document.createElement("div");
+    wrap.style.flex = "1";
+    wrap.appendChild(name);
+    wrap.appendChild(desc);
+
+    const btnLoad = document.createElement("button");
+    btnLoad.textContent = "Carregar";
+    btnLoad.style.cssText = "background:var(--accent);color:#0a0d14;border:none;padding:4px 10px;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer;";
+    btnLoad.onclick = () => {
+      applyProfile(p);
+      document.getElementById("profiles-backdrop").hidden = true;
+    };
+    const btnDel = document.createElement("button");
+    btnDel.textContent = "✕";
+    btnDel.title = "Excluir";
+    btnDel.style.cssText = "background:transparent;border:1px solid var(--border);color:var(--muted);padding:4px 10px;border-radius:4px;font-size:12px;cursor:pointer;";
+    btnDel.onclick = () => {
+      if (confirm(`Excluir perfil "${p.name}"?`)) {
+        const arr = getProfiles();
+        arr.splice(idx, 1);
+        setProfiles(arr);
+        renderProfilesList();
+      }
+    };
+
+    row.appendChild(wrap);
+    row.appendChild(btnLoad);
+    row.appendChild(btnDel);
+    container.appendChild(row);
+  });
+}
+
+document.getElementById("profiles-open").addEventListener("click", () => {
+  renderProfilesList();
+  document.getElementById("profiles-backdrop").hidden = false;
+});
+document.getElementById("profiles-close").addEventListener("click", () => {
+  document.getElementById("profiles-backdrop").hidden = true;
+});
+document.getElementById("profiles-backdrop").addEventListener("click", (e) => {
+  if (e.target.id === "profiles-backdrop") e.target.hidden = true;
+});
+document.getElementById("profile-save").addEventListener("click", () => {
+  const name = document.getElementById("profile-new-name").value.trim();
+  if (!name) { alert("Dê um nome ao perfil"); return; }
+  const arr = getProfiles();
+  arr.push({ name, ...currentSettings() });
+  setProfiles(arr);
+  document.getElementById("profile-new-name").value = "";
+  renderProfilesList();
+});
+document.getElementById("profile-export").addEventListener("click", () => {
+  const profs = getProfiles();
+  const blob = new Blob([JSON.stringify(profs, null, 2)], {type: "application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "tradutor-perfis.json";
+  a.click();
+  URL.revokeObjectURL(url);
+});
+document.getElementById("profile-import").addEventListener("change", (ev) => {
+  const file = ev.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const imported = JSON.parse(e.target.result);
+      if (!Array.isArray(imported)) throw new Error("não é array");
+      if (confirm(`Importar ${imported.length} perfis? (substitui os atuais)`)) {
+        setProfiles(imported);
+        renderProfilesList();
+      }
+    } catch (err) {
+      alert("Erro lendo arquivo: " + err.message);
+    }
+  };
+  reader.readAsText(file);
+  ev.target.value = "";  // permite reimportar o mesmo arquivo
+});
+
+// === Audio source dropdown ===
+// Classifica um mic pelo nome — devolve {tier, icon, label, score, priority}
+// PRIORIDADE DA IGREJA:
+//   1º P2 (cabo da mesa/recepção plugado na entrada do PC) — score 200
+//   2º Wireless Holyland — score 150
+//   3º Outros externos (USB, mesa, headset) — score 100
+//   4º Interno do laptop — score 30 (último recurso)
+//   5º Virtual (Camo etc) — score 10 (não usar)
+function classifyMic(name) {
+  const n = (name || "").toLowerCase();
+
+  // === 1ª PRIORIDADE: P2 / cabo na entrada de mic do PC ===
+  // Nomes típicos quando há cabo plugado: "Microphone (Realtek...)",
+  // "External Microphone", "Line In", "Microphone jack"
+  if (/\bexternal\s*microphone\b/.test(n) ||
+      /\b(line.?in|p2|p3|3\.?5\s?mm|jack)\b/.test(n) ||
+      /^microphone\s*\(realtek/.test(n) ||
+      /^microfone\s*\(realtek/.test(n)) {
+    return { tier: 0, icon: "🎤", label: "Mic P2 (cabo da mesa)", score: 200, priority: "1º" };
+  }
+
+  // === 2ª PRIORIDADE: Wireless Holyland (e similares) ===
+  if (/\b(hollyland|hollywood|lark)\b/.test(n) || /wireless microphone/.test(n)) {
+    return { tier: 0, icon: "🎙", label: "Wireless Holyland", score: 150, priority: "2º" };
+  }
+  // Outros wireless profissionais (Rode, Shure, etc) — também tier 0 mas score menor
+  if (/\b(wireless|rode\s|shure|sennheiser|audio-?technica|dji\s)\b/.test(n)) {
+    return { tier: 0, icon: "🎙", label: "Microfone sem fio", score: 140, priority: "2º" };
+  }
+
+  // === 3ª PRIORIDADE: USB Audio genérico ===
+  if (/usb\s*(audio|microphone|codec|mic)/.test(n) || /dispositivo de [áa]udio usb/.test(n)) {
+    return { tier: 0, icon: "🎙", label: "Microfone USB", score: 100, priority: "3º" };
+  }
+  // Mesa de som / interface
+  if (/\b(scarlett|focusrite|behringer|presonus|mackie|onyx|yamaha mg|soundcraft|zoom (l|h)\d|tascam|motu)\b/.test(n)) {
+    return { tier: 1, icon: "🎚", label: "Mesa de som / Interface", score: 95, priority: "3º" };
+  }
+  // Headset
+  if (/\b(headset|fone com microfone|auricular)\b/.test(n)) {
+    return { tier: 0, icon: "🎧", label: "Headset", score: 80, priority: "3º" };
+  }
+
+  // === Virtual (NÃO usar) ===
+  if (/\b(camo|ndi|obs|virtual)\b/.test(n)) {
+    return { tier: 3, icon: "📷", label: "Câmera virtual (não use)", score: 10, priority: null };
+  }
+
+  // === Mic interno do laptop ===
+  if (/\b(intel.*smart sound|internal|embedded|integrated|onboard|built-?in)\b/.test(n) ||
+      /grupo de microfones/.test(n) || /tecnologia intel/.test(n)) {
+    return { tier: 2, icon: "💻", label: "Microfone interno do laptop", score: 30, priority: null };
+  }
+
+  // Desconhecido
+  return { tier: 0, icon: "🎤", label: "Microfone", score: 60, priority: "3º" };
+}
+
+async function loadAudioDevices() {
+  try {
+    const resp = await fetch("/api/audio-devices");
+    const data = await resp.json();
+    const sel = els.audioSource;
+
+    // Limpa qualquer opção não-browser
+    Array.from(sel.options).forEach(o => {
+      if (o.value !== "browser") sel.removeChild(o);
+    });
+
+    // Classifica + ordena mics por score (melhor primeiro)
+    const allMics = (data.microphones || []).map(d => ({
+      ...d,
+      cls: classifyMic(d.name),
+    }));
+    allMics.sort((a, b) => b.cls.score - a.cls.score);
+
+    // Pega P2 (priority "1º") e Wireless (priority "2º") pra dar destaque máximo
+    const p2 = allMics.find(m => m.cls.priority === "1º");
+    const wireless = allMics.find(m => m.cls.priority === "2º");
+
+    // === GRUPO 1: RECOMENDADOS — escolha um destes ===
+    // Mostra P2 + Holyland como as 2 melhores opções, em ordem.
+    // O 1º (P2) é o que vai ser auto-selecionado se disponível.
+    const top = [];
+    if (p2) top.push({ mic: p2, label: "1º — USE ESTE" });
+    if (wireless && wireless.id !== p2?.id) top.push({ mic: wireless, label: "2º — Se P2 não funcionar" });
+
+    if (top.length > 0) {
+      const grp = document.createElement("optgroup");
+      grp.label = "✓ RECOMENDADOS — escolha um destes";
+      top.forEach(({ mic, label }) => {
+        const o = document.createElement("option");
+        o.value = "mic:" + mic.id;
+        o.textContent = `${mic.cls.icon} ${mic.name}  ←  ${label}`;
+        o.dataset.recommended = "true";
+        o.dataset.priority = mic.cls.priority;
+        grp.appendChild(o);
+      });
+      sel.appendChild(grp);
+    }
+
+    // === GRUPO 2: Outros mics físicos ===
+    const topIds = new Set(top.map(t => t.mic.id));
+    const others = allMics.filter(m => !topIds.has(m.id));
+    if (others.length > 0) {
+      const grp = document.createElement("optgroup");
+      grp.label = "🎙 Outros microfones disponíveis";
+      others.forEach(m => {
+        const o = document.createElement("option");
+        o.value = "mic:" + m.id;
+        o.textContent = `${m.cls.icon} ${m.name}  —  ${m.cls.label}`;
+        grp.appendChild(o);
+      });
+      sel.appendChild(grp);
+    }
+
+    // Variável `recommended` pra preservar lógica de auto-seleção mais embaixo
+    const recommended = p2 || wireless;
+
+    // === GRUPO 3: Áudio do sistema (loopback) ===
+    if (data.loopbacks && data.loopbacks.length > 0) {
+      const grp = document.createElement("optgroup");
+      grp.label = "🔴 Áudio do sistema (YouTube / live / Zoom / qualquer app)";
+      const def = document.createElement("option");
+      def.value = "loopback";
+      def.textContent = "🔴 Capturar áudio do computador (YouTube/live)";
+      grp.appendChild(def);
+      data.loopbacks.forEach(d => {
+        const o = document.createElement("option");
+        o.value = "loopback:" + d.id;
+        o.textContent = d.name.replace(/\(loopback\)$/i, "").trim();
+        grp.appendChild(o);
+      });
+      sel.appendChild(grp);
+    }
+
+    // Auto-seleciona o recomendado (se nada estava selecionado ainda OU se browser estava)
+    if (recommended && (sel.value === "browser" || sel.value === "")) {
+      // Recupera preferência salva pra honrar escolha do operador
+      let saved = null;
+      try { saved = localStorage.getItem("operator.audioSource"); } catch (_) {}
+      if (!saved || saved === "browser") {
+        sel.value = "mic:" + recommended.id;
+        showMicRecommendation(recommended);
+      } else {
+        sel.value = saved;
+      }
+    }
+  } catch (e) {
+    console.warn("falha carregar audio devices", e);
+  }
+}
+
+// Notificação visual quando auto-seleciona o mic recomendado
+function showMicRecommendation(mic) {
+  let msg;
+  if (mic.cls.priority === "1º") {
+    msg = `✓ Mic P2 detectado e selecionado automaticamente: ${mic.name}`;
+  } else if (mic.cls.priority === "2º") {
+    msg = `✓ Holyland detectado e selecionado: ${mic.name}. (P2 é prioridade — conecte se disponível.)`;
+  } else {
+    msg = `✓ Mic detectado: ${mic.cls.icon} ${mic.name} (${mic.cls.label})`;
+  }
+  if (typeof showToast === "function") {
+    showToast("mic-auto", msg, 5500);
+  } else {
+    console.info("[audio]", msg);
+  }
+}
+
+// Atualiza dica visual ao lado do dropdown explicando a escolha atual
+function refreshMicHint() {
+  const hintEl = document.getElementById("mic-hint");
+  if (!hintEl) return;
+  const sel = els.audioSource;
+  const opt = sel.options[sel.selectedIndex];
+  if (!opt) { hintEl.textContent = ""; return; }
+  const val = opt.value;
+  if (val === "browser") {
+    hintEl.innerHTML = "⚠ <b>Mic do navegador</b> — pega do PC inteiro. Conecte o cabo P2 (ou ligue o Holyland) e selecione na lista.";
+    hintEl.style.color = "#FBBF24";
+  } else if (opt.dataset.priority === "1º") {
+    hintEl.innerHTML = "✓ <b>Mic P2 ativo</b> — primeira opção, qualidade ideal direto da mesa.";
+    hintEl.style.color = "#5fcf80";
+  } else if (opt.dataset.priority === "2º") {
+    hintEl.innerHTML = "✓ <b>Wireless Holyland ativo</b> — segunda opção (use se P2 falhar ou se for sem fio).";
+    hintEl.style.color = "#5fcf80";
+  } else if (opt.dataset.recommended === "true") {
+    hintEl.innerHTML = "✓ <b>Mic recomendado ativo</b>.";
+    hintEl.style.color = "#5fcf80";
+  } else if (val.startsWith("loopback")) {
+    hintEl.innerHTML = "🔴 <b>Áudio do PC (YouTube/live)</b> — pode <b>mutar a caixinha</b> que continua captando. Pra silêncio 100% garantido, use VB-CABLE (veja o LEIA-ME).";
+    hintEl.style.color = "#5b8cff";
+  } else if (val.startsWith("mic:")) {
+    const text = opt.textContent || "";
+    if (/interno do laptop/i.test(text)) {
+      hintEl.innerHTML = "⚠ <b>Mic interno do laptop</b> — vai pegar ruído ambiente. Conecte o cabo P2 ou Holyland.";
+      hintEl.style.color = "#FBBF24";
+    } else if (/c[âa]mera virtual/i.test(text)) {
+      hintEl.innerHTML = "⛔ <b>Câmera virtual</b> — NÃO use, escolha P2 ou Holyland.";
+      hintEl.style.color = "#ff6b6b";
+    } else {
+      hintEl.innerHTML = "✓ <b>Mic físico selecionado</b>.";
+      hintEl.style.color = "#5fcf80";
+    }
+  }
+}
+
+loadAudioDevices().then(refreshMicHint);
+
+// ============================================================
+// 🎵 MÚSICA — buscar no YouTube + letra traduzida
+// ============================================================
+(function() {
+  const backdrop = document.getElementById("music-backdrop");
+  const openBtn = document.getElementById("music-btn");
+  const closeBtn = document.getElementById("music-close");
+  const searchInput = document.getElementById("music-search-input");
+  const searchBtn = document.getElementById("music-search-btn");
+  const statusEl = document.getElementById("music-status");
+  const resultsEl = document.getElementById("music-results");
+  const preview = document.getElementById("music-preview");
+  const previewTitle = document.getElementById("music-preview-title");
+  const previewBadge = document.getElementById("music-preview-badge");
+  const previewLines = document.getElementById("music-preview-lines");
+  const showBtn = document.getElementById("music-show-btn");
+  const hideBtn = document.getElementById("music-hide-btn");
+  let currentVideoId = null;
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, c =>
+      ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]);
+  }
+
+  openBtn.addEventListener("click", () => { backdrop.hidden = false; searchInput.focus(); });
+  closeBtn.addEventListener("click", () => { backdrop.hidden = true; });
+  backdrop.addEventListener("click", (e) => { if (e.target.id === "music-backdrop") backdrop.hidden = true; });
+
+  async function doSearch() {
+    const q = searchInput.value.trim();
+    if (!q) return;
+    statusEl.textContent = "🔍 Buscando no YouTube...";
+    resultsEl.innerHTML = "";
+    preview.style.display = "none";
+    try {
+      const r = await fetch("/api/youtube/search?q=" + encodeURIComponent(q));
+      const data = await r.json();
+      if (!r.ok || data.error) {
+        statusEl.textContent = "⚠ " + (data.error || "falha na busca");
+        return;
+      }
+      const results = data.results || [];
+      if (!results.length) { statusEl.textContent = "Nada encontrado."; return; }
+      statusEl.textContent = results.length + " resultados — clique no vídeo (prefira o OFICIAL):";
+      for (const v of results) {
+        const row = document.createElement("div");
+        row.style.cssText = "display:flex; gap:10px; align-items:center; padding:8px; border:1px solid var(--border,#333); border-radius:8px; cursor:pointer;";
+        row.innerHTML =
+          `<img src="${esc(v.thumbnail)}" style="width:80px; height:45px; object-fit:cover; border-radius:4px; flex-shrink:0;" loading="lazy">
+           <div style="flex:1; min-width:0;">
+             <div style="font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(v.title)}</div>
+             <div style="font-size:11.5px; color:var(--text-muted,#888);">${esc(v.channel)} ${v.duration ? "· " + esc(v.duration) : ""}</div>
+           </div>`;
+        row.addEventListener("click", () => prepareSong(v));
+        row.addEventListener("mouseenter", () => row.style.background = "rgba(91,140,255,0.08)");
+        row.addEventListener("mouseleave", () => row.style.background = "");
+        resultsEl.appendChild(row);
+      }
+    } catch (e) {
+      statusEl.textContent = "⚠ erro: " + e.message;
+    }
+  }
+  searchBtn.addEventListener("click", doSearch);
+  searchInput.addEventListener("keydown", (e) => { if (e.key === "Enter") doSearch(); });
+
+  async function prepareSong(v) {
+    statusEl.textContent = "⏳ Baixando legenda e traduzindo \"" + v.title + "\"...";
+    preview.style.display = "none";
+    try {
+      const r = await fetch("/api/youtube/prepare", {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ video_id: v.id, title: v.title }),
+      });
+      const data = await r.json();
+      if (!r.ok || data.error) {
+        statusEl.textContent = "⚠ " + (data.error || "falha ao preparar");
+        return;
+      }
+      currentVideoId = data.video_id;
+      statusEl.textContent = "✓ Letra pronta! Confira e clique em 'Mostrar no display'.";
+      previewTitle.textContent = data.title;
+      const srcMap = {
+        "manual-pt": ["✓ legenda oficial (letra exata)", "#5fcf80"],
+        "auto-pt": ["⚠ legenda automática (pode ter erro)", "#FBBF24"],
+        "manual-es": ["✓ legenda em espanhol", "#5fcf80"],
+        "auto-es": ["⚠ auto em espanhol", "#FBBF24"],
+      };
+      const [txt, col] = srcMap[data.source] || ["legenda", "#888"];
+      previewBadge.textContent = txt;
+      previewBadge.style.background = col + "22";
+      previewBadge.style.color = col;
+      previewLines.innerHTML = "";
+      for (const ln of data.lines) {
+        const d = document.createElement("div");
+        d.style.cssText = "padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.04);";
+        d.innerHTML = `<div style="color:var(--accent,#5b8cff); font-weight:600;">${esc(ln.es)}</div>` +
+          (ln.pt ? `<div style="color:var(--text-muted,#888); font-size:11.5px;">${esc(ln.pt)}</div>` : "");
+        previewLines.appendChild(d);
+      }
+      preview.style.display = "block";
+    } catch (e) {
+      statusEl.textContent = "⚠ erro: " + e.message;
+    }
+  }
+
+  showBtn.addEventListener("click", async () => {
+    if (!currentVideoId) return;
+    try {
+      const r = await fetch("/api/youtube/show", {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ video_id: currentVideoId }),
+      });
+      const data = await r.json();
+      if (data.ok) {
+        showToast?.("music-show", `📺 Letra no display (${data.displays} dispositivos)`, 3000);
+      }
+    } catch (e) {}
+  });
+  hideBtn.addEventListener("click", async () => {
+    try {
+      await fetch("/api/youtube/hide", { method: "POST" });
+      showToast?.("music-hide", "✖ Letra removida — voltou pra tradução", 2500);
+    } catch (e) {}
+  });
+})();
+
+// ============================================================
+// 🎤 TESTE DE MICROFONE (com avaliação automática)
+// ============================================================
+const micTestState = {
+  results: [],        // [{deviceId, name, cls, rmsDb, peakDb, silentRatio, score, grade, audioBlob}]
+  currentAudio: null, // <audio> em reprodução (pra dar pause antes de tocar outro)
+};
+
+document.getElementById("mic-test-btn").addEventListener("click", openMicTestModal);
+document.getElementById("mictest-close").addEventListener("click", closeMicTestModal);
+document.getElementById("mictest-backdrop").addEventListener("click", (e) => {
+  if (e.target.id === "mictest-backdrop") closeMicTestModal();
+});
+
+async function openMicTestModal() {
+  const backdrop = document.getElementById("mictest-backdrop");
+  backdrop.hidden = false;
+  // Esconde ranking anterior
+  document.getElementById("mictest-ranking").style.display = "none";
+  micTestState.results = [];
+  await populateMicTestList();
+}
+
+function closeMicTestModal() {
+  // Para qualquer reprodução
+  if (micTestState.currentAudio) {
+    try { micTestState.currentAudio.pause(); } catch(_) {}
+    micTestState.currentAudio = null;
+  }
+  document.getElementById("mictest-backdrop").hidden = true;
+}
+
+async function populateMicTestList() {
+  const listEl = document.getElementById("mictest-list");
+  listEl.innerHTML = `<div style="color: var(--text-muted, #888); padding: 12px;">Pedindo permissão de microfone…</div>`;
+
+  // 1. Pede permissão pra liberar nomes dos devices
+  try {
+    const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    tempStream.getTracks().forEach(t => t.stop());
+  } catch (e) {
+    listEl.innerHTML = `<div style="color: #ff6b6b; padding: 12px;">⛔ Permissão de microfone negada. Permita no navegador (ícone do cadeado) e tente novamente.</div>`;
+    return;
+  }
+
+  // 2. Lista mics
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  const mics = devices.filter(d => d.kind === "audioinput" && d.deviceId !== "default" && d.deviceId !== "communications");
+  if (mics.length === 0) {
+    listEl.innerHTML = `<div style="color: var(--text-muted, #888); padding: 12px;">Nenhum mic detectado.</div>`;
+    return;
+  }
+
+  // 3. Classifica e ordena por prioridade (P2 > Holyland > outros)
+  const classified = mics.map(m => ({
+    deviceId: m.deviceId,
+    name: m.label || "Microfone desconhecido",
+    cls: classifyMic(m.label || ""),
+  })).sort((a, b) => b.cls.score - a.cls.score);
+
+  // 4. Cria card pra cada mic
+  listEl.innerHTML = "";
+  classified.forEach(mic => {
+    listEl.appendChild(buildMicCard(mic));
+  });
+}
+
+function buildMicCard(mic) {
+  const card = document.createElement("div");
+  card.className = "mictest-card";
+  if (mic.cls.priority === "1º") card.classList.add("priority-1");
+  if (mic.cls.priority === "2º") card.classList.add("priority-2");
+
+  const cardId = "mic-" + mic.deviceId.slice(0, 12).replace(/[^a-z0-9]/gi, "");
+  card.dataset.cardId = cardId;
+
+  let priorityBadge = "";
+  if (mic.cls.priority === "1º") priorityBadge = `<span class="mic-priority-badge">1º — recomendado</span>`;
+  else if (mic.cls.priority === "2º") priorityBadge = `<span class="mic-priority-badge">2º opção</span>`;
+
+  card.innerHTML = `
+    <div class="row1">
+      <span class="mic-name">${mic.cls.icon} ${escapeHtml(mic.name)}</span>
+      ${priorityBadge}
+      <span class="mic-cat">${escapeHtml(mic.cls.label)}</span>
+    </div>
+    <div class="row1">
+      <button class="mictest-btn record-btn">▶ Gravar 5s</button>
+      <button class="mictest-btn play-btn" disabled>🔊 Ouvir</button>
+      <button class="mictest-btn use-btn" disabled>✓ Usar este</button>
+    </div>
+    <div class="mictest-meter" style="display:none;"><div class="mictest-meter-fill"></div></div>
+    <div class="mictest-result" style="display:none;"></div>
+    <div class="mictest-feedback" style="display:none;"></div>
+  `;
+
+  const recordBtn = card.querySelector(".record-btn");
+  const playBtn   = card.querySelector(".play-btn");
+  const useBtn    = card.querySelector(".use-btn");
+  const meter     = card.querySelector(".mictest-meter");
+  const meterFill = card.querySelector(".mictest-meter-fill");
+  const resultEl  = card.querySelector(".mictest-result");
+  const feedbackEl = card.querySelector(".mictest-feedback");
+
+  recordBtn.addEventListener("click", async () => {
+    recordBtn.classList.add("recording");
+    recordBtn.textContent = "● Gravando 5s…";
+    meter.style.display = "block";
+    resultEl.style.display = "none";
+    feedbackEl.style.display = "none";
+
+    try {
+      const analysis = await recordAndAnalyzeMic(mic.deviceId, (rms) => {
+        const pct = Math.min(100, rms * 400);
+        meterFill.style.width = pct + "%";
+      });
+      // Salva resultado
+      const result = { ...mic, ...analysis };
+      // Substitui se já tinha esse mic no array (re-teste)
+      micTestState.results = micTestState.results.filter(r => r.deviceId !== mic.deviceId);
+      micTestState.results.push(result);
+      renderMicResult(card, result);
+      playBtn.disabled = false;
+      useBtn.disabled = false;
+      playBtn.addEventListener("click", () => playMicAudio(playBtn, result.audioBlob), { once: false });
+      useBtn.addEventListener("click", () => selectMicAsAudioSource(result));
+      updateRanking();
+    } catch (e) {
+      console.error("test mic falhou", e);
+      feedbackEl.style.display = "block";
+      feedbackEl.textContent = "⛔ Erro ao gravar: " + (e.message || e);
+    } finally {
+      recordBtn.classList.remove("recording");
+      recordBtn.textContent = "↻ Refazer 5s";
+      setTimeout(() => meterFill.style.width = "0%", 400);
+    }
+  });
+
+  return card;
+}
+
+async function recordAndAnalyzeMic(deviceId, onMeter) {
+  const constraints = {
+    audio: {
+      deviceId: { exact: deviceId },
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
+      channelCount: 1,
+      sampleRate: 16000,
+    },
+  };
+  const stream = await navigator.mediaDevices.getUserMedia(constraints);
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const src = ctx.createMediaStreamSource(stream);
+  const analyser = ctx.createAnalyser();
+  analyser.fftSize = 2048;
+  src.connect(analyser);
+
+  const buffer = new Float32Array(analyser.fftSize);
+  const rmsSamples = [];
+  const peakSamples = [];
+
+  // MediaRecorder pra salvar áudio
+  let recorder, chunks = [];
+  const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus"
+                : MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm"
+                : "audio/ogg";
+  try {
+    recorder = new MediaRecorder(stream, { mimeType });
+    recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+    recorder.start();
+  } catch (e) {
+    console.warn("MediaRecorder falhou, sem replay:", e);
+  }
+
+  // Coleta 5s de amostras
+  const startTs = performance.now();
+  await new Promise(resolve => {
+    function tick() {
+      const now = performance.now();
+      analyser.getFloatTimeDomainData(buffer);
+      let sumSq = 0, peak = 0;
+      for (let i = 0; i < buffer.length; i++) {
+        const v = buffer[i];
+        sumSq += v * v;
+        const av = Math.abs(v);
+        if (av > peak) peak = av;
+      }
+      const rms = Math.sqrt(sumSq / buffer.length);
+      rmsSamples.push(rms);
+      peakSamples.push(peak);
+      if (onMeter) onMeter(rms);
+      if (now - startTs < 5000) {
+        requestAnimationFrame(tick);
+      } else {
+        resolve();
+      }
+    }
+    requestAnimationFrame(tick);
+  });
+
+  // Para gravação e captura blob
+  let audioBlob = null;
+  if (recorder && recorder.state !== "inactive") {
+    await new Promise(res => {
+      recorder.onstop = () => {
+        audioBlob = new Blob(chunks, { type: recorder.mimeType });
+        res();
+      };
+      recorder.stop();
+    });
+  }
+
+  // Cleanup
+  stream.getTracks().forEach(t => t.stop());
+  try { ctx.close(); } catch(_) {}
+
+  // Analisa
+  return analyzeRecording(rmsSamples, peakSamples, audioBlob);
+}
+
+function analyzeRecording(rmsSamples, peakSamples, audioBlob) {
+  if (rmsSamples.length === 0) {
+    return { score: 0, grade: "D", feedback: "Sem amostras.", audioBlob };
+  }
+  const avgRms = rmsSamples.reduce((a, b) => a + b, 0) / rmsSamples.length;
+  const maxPeak = peakSamples.reduce((a, b) => Math.max(a, b), 0);
+
+  // dB (referência 1.0 = 0dBFS)
+  const safeLog = v => v > 0.000001 ? 20 * Math.log10(v) : -120;
+  const rmsDb = safeLog(avgRms);
+  const peakDb = safeLog(maxPeak);
+
+  // Silêncio = frames com amplitude < 10% do RMS médio
+  const noiseFloor = avgRms * 0.15;
+  const silentCount = rmsSamples.filter(r => r < noiseFloor).length;
+  const silentRatio = silentCount / rmsSamples.length;
+
+  // Estimativa de SNR — RMS dos frames "altos" vs frames "baixos"
+  const sortedRms = [...rmsSamples].sort((a, b) => a - b);
+  const lowChunk = sortedRms.slice(0, Math.floor(sortedRms.length * 0.2));
+  const highChunk = sortedRms.slice(Math.floor(sortedRms.length * 0.7));
+  const lowRms = lowChunk.length ? lowChunk.reduce((a, b) => a + b, 0) / lowChunk.length : 0;
+  const highRms = highChunk.length ? highChunk.reduce((a, b) => a + b, 0) / highChunk.length : 0;
+  const snrDb = lowRms > 0 ? safeLog(highRms / lowRms) : 60;
+
+  // ===== Pontuação =====
+  let score = 0;
+  const issues = [];
+
+  // Volume RMS (-30 a -15 dB = ideal)
+  if (rmsDb >= -30 && rmsDb <= -15) {
+    score += 35;
+  } else if (rmsDb > -15 && rmsDb < -5) {
+    score += 25;
+    issues.push("volume um pouco alto");
+  } else if (rmsDb >= -40 && rmsDb < -30) {
+    score += 20;
+    issues.push("volume baixo — fale mais perto ou suba ganho");
+  } else if (rmsDb < -40) {
+    score += 5;
+    issues.push("MUITO baixo — não vai dar pra entender bem");
+  } else if (rmsDb >= -5) {
+    score += 5;
+    issues.push("MUITO alto — vai distorcer");
+  }
+
+  // Pico (clipping)
+  if (peakDb < -3) {
+    score += 25;
+  } else if (peakDb < -0.5) {
+    score += 15;
+    issues.push("pico próximo do limite");
+  } else {
+    issues.push("⚠ clipping detectado (áudio cortado no topo)");
+  }
+
+  // SNR
+  if (snrDb > 25) {
+    score += 25;
+  } else if (snrDb > 18) {
+    score += 18;
+  } else if (snrDb > 12) {
+    score += 10;
+    issues.push("muito ruído de fundo");
+  } else {
+    score += 0;
+    issues.push("⚠ ruído de fundo igual à fala — péssima qualidade");
+  }
+
+  // Tem silêncio entre palavras? Bom sinal de baixo ruído ambiente
+  if (silentRatio > 0.25) score += 15;
+  else if (silentRatio > 0.1) score += 8;
+  else issues.push("ambiente muito barulhento (sem silêncio entre frases)");
+
+  score = Math.max(0, Math.min(100, Math.round(score)));
+
+  let grade;
+  if (score >= 85) grade = "A";
+  else if (score >= 70) grade = "B";
+  else if (score >= 50) grade = "C";
+  else grade = "D";
+
+  const feedback = buildFeedback(grade, issues);
+
+  return {
+    rmsDb, peakDb, snrDb, silentRatio,
+    score, grade, feedback, audioBlob
+  };
+}
+
+function buildFeedback(grade, issues) {
+  let msg;
+  if (grade === "A") msg = "✓ Excelente! Pode usar.";
+  else if (grade === "B") msg = "✓ Bom — funcional.";
+  else if (grade === "C") msg = "⚠ Mediano — funciona mas pode ter problemas.";
+  else msg = "⛔ Ruim — evite usar.";
+  if (issues.length) msg += " (" + issues.join("; ") + ")";
+  return msg;
+}
+
+function renderMicResult(card, result) {
+  const resultEl = card.querySelector(".mictest-result");
+  const feedbackEl = card.querySelector(".mictest-feedback");
+
+  function lvl(v, okMin, warnMin, okMax, warnMax) {
+    if (v >= okMin && v <= okMax) return "ok";
+    if (v >= warnMin && v <= warnMax) return "warn";
+    return "bad";
+  }
+  const rmsCls  = lvl(result.rmsDb,  -30, -40, -15, -5);
+  const peakCls = result.peakDb < -3 ? "ok" : (result.peakDb < -0.5 ? "warn" : "bad");
+  const snrCls  = result.snrDb > 25 ? "ok" : (result.snrDb > 15 ? "warn" : "bad");
+
+  resultEl.style.display = "flex";
+  resultEl.innerHTML = `
+    <span><span class="mictest-grade ${result.grade}">${result.grade}</span></span>
+    <span><span class="label">vol:</span> <span class="val ${rmsCls}">${result.rmsDb.toFixed(1)} dB</span></span>
+    <span><span class="label">pico:</span> <span class="val ${peakCls}">${result.peakDb.toFixed(1)} dB</span></span>
+    <span><span class="label">ruído:</span> <span class="val ${snrCls}">SNR ${result.snrDb.toFixed(0)} dB</span></span>
+    <span><span class="label">score:</span> <span class="val">${result.score}/100</span></span>
+  `;
+  feedbackEl.style.display = "block";
+  feedbackEl.textContent = result.feedback;
+}
+
+function playMicAudio(btn, audioBlob) {
+  if (!audioBlob) { alert("Sem áudio salvo."); return; }
+  // Para tudo que está tocando
+  if (micTestState.currentAudio) {
+    try { micTestState.currentAudio.pause(); } catch(_) {}
+    document.querySelectorAll(".mictest-btn.playing").forEach(b => {
+      b.classList.remove("playing");
+      b.textContent = "🔊 Ouvir";
+    });
+  }
+  const url = URL.createObjectURL(audioBlob);
+  const audio = new Audio(url);
+  micTestState.currentAudio = audio;
+  btn.classList.add("playing");
+  btn.textContent = "■ Parar";
+  audio.onended = () => {
+    btn.classList.remove("playing");
+    btn.textContent = "🔊 Ouvir";
+    URL.revokeObjectURL(url);
+    micTestState.currentAudio = null;
+  };
+  audio.play().catch(e => {
+    console.warn("play falhou", e);
+    btn.classList.remove("playing");
+    btn.textContent = "🔊 Ouvir";
+  });
+}
+
+function selectMicAsAudioSource(mic) {
+  // Tenta achar no dropdown atual de audioSource
+  const sel = els.audioSource;
+  // O dropdown usa "mic:<id>" do BACKEND (system_capture), não o deviceId do browser.
+  // Vamos casar pelo NOME — se houver mic com mesmo nome, seleciona.
+  let matched = null;
+  for (const opt of sel.options) {
+    if (opt.textContent.includes(mic.name)) { matched = opt; break; }
+  }
+  if (matched) {
+    sel.value = matched.value;
+    sel.dispatchEvent(new Event("change"));
+    closeMicTestModal();
+  } else {
+    // Fallback: usa "browser" mode com o deviceId direto
+    sel.value = "browser";
+    sel.dispatchEvent(new Event("change"));
+    closeMicTestModal();
+    showToast?.("mic-set", `✓ Selecionado "${mic.name}" via mic do navegador.`, 4000);
+  }
+}
+
+function updateRanking() {
+  const ranking = [...micTestState.results].sort((a, b) => b.score - a.score);
+  if (ranking.length === 0) return;
+  const rankingEl = document.getElementById("mictest-ranking");
+  const listEl = document.getElementById("mictest-ranking-list");
+  rankingEl.style.display = "block";
+  listEl.innerHTML = "";
+  ranking.forEach((r, i) => {
+    const item = document.createElement("div");
+    item.className = "mictest-rank-item";
+    item.innerHTML = `
+      <span class="rank-pos">${i + 1}</span>
+      <div class="rank-info">
+        <div class="rank-name">${r.cls.icon} ${escapeHtml(r.name)} <span class="mictest-grade ${r.grade}" style="width:22px;height:22px;font-size:12px;margin-left:6px;vertical-align:-4px;">${r.grade}</span></div>
+        <div class="rank-meta">score ${r.score}/100 · vol ${r.rmsDb.toFixed(0)} dB · SNR ${r.snrDb.toFixed(0)} dB · ${r.feedback.split("(")[0]}</div>
+      </div>
+      <button class="rank-use-btn" data-i="${i}">${i === 0 ? "🏆 Usar este" : "Usar"}</button>
+    `;
+    item.querySelector(".rank-use-btn").addEventListener("click", () => selectMicAsAudioSource(r));
+    listEl.appendChild(item);
+  });
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]
+  );
+}
+
+// Atualiza dica + salva escolha sempre que o operador troca
+els.audioSource.addEventListener("change", () => {
+  refreshMicHint();
+  try { localStorage.setItem("operator.audioSource", els.audioSource.value); } catch (_) {}
+});
+
+// Se o usuário troca a fonte enquanto está gravando, manda comando
+// (e nesse caso convém parar e re-iniciar pra reconfigurar limpo)
+els.audioSource.addEventListener("change", () => {
+  if (state.recording) {
+    // Re-iniciar pra trocar fonte limpo
+    stopRecording().then(() => {
+      setTimeout(() => startRecording(), 200);
+    });
+  }
+});
+
+// Aviso inicial de contexto inseguro (mic vai falhar)
+if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+  const warn = document.getElementById("security-warn");
+  if (warn) warn.style.display = "block";
+  setStatus("⚠ Contexto inseguro — abra http://localhost:8765 no navegador direto", "error");
+} else {
+  setStatus("Tudo pronto — clique em Iniciar pra começar", "");
+}
+</script>
+</body>
+</html>

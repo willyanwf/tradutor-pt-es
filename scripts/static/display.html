@@ -1,0 +1,1073 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Traducción en vivo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* Fatigue stages — reduzem strain ocular em sermões longos:
+     stage 0 (0-20min): contraste cheio, leitura fresca
+     stage 1 (20-45min): contraste reduzido (12.4:1, still AAA), text #E8E6E1
+     stage 2 (>45min):   + line-height aumentado, padding maior
+     Tecla T toggle ON/OFF (default ON). Halation (cataratas) +
+     Legge & Bigelow 2011, RNIB 2020. */
+  :root {
+    --bg: #0f1115;
+    --panel: #161a22;
+    --border: #262c38;
+    --fg: #f5f5f5;
+    --line-height-text: 1.32;
+    --dim: #8a92a3;
+    /* CB-safe pair (Coblis OK pra deuteranopia/protanopia/tritanopia) */
+    --pt: #60A5FA;
+    --es: #FBBF24;
+    --tentative: rgba(255, 255, 255, 0.45);
+    --plate: rgba(0, 0, 0, 0.78);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: "Atkinson Hyperlegible", "Inter", -apple-system, "Segoe UI", system-ui, sans-serif;
+    font-weight: 500;
+    letter-spacing: 0.005em;
+    overflow: hidden;
+    cursor: none;
+  }
+  body:hover { cursor: default; }
+
+  /* O stage e uma coluna vertical com cards empilhados — mais recente em CIMA. */
+  .stage {
+    position: fixed;
+    inset: 0;
+    padding: 5vh 4vw 4vh 4vw;
+    display: flex;
+    flex-direction: column;
+    gap: 2vh;
+    overflow: hidden;
+  }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 2.2vh 2.5vw;
+    flex-shrink: 0;
+    animation: arriveIn 0.55s cubic-bezier(0.22, 0.61, 0.36, 1);
+    transition: opacity 0.6s ease-out;
+  }
+  @keyframes arriveIn {
+    from { opacity: 0; transform: translateY(-18px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Opacidade decrescente do histórico — atual = 100%, mais antigo = mais fraco.
+     Dá pista visual: novo chama atenção, antigo "envelhece" gradualmente.
+     Audiência foca naturalmente no card mais opaco (recente). */
+  .card.age-1 { opacity: 0.85; }
+  .card.age-2 { opacity: 0.62; }
+  .card.age-3 { opacity: 0.42; }
+  .card.age-4 { opacity: 0.28; }
+  .card.age-5 { opacity: 0.18; }
+
+  /* Cartao atual ainda em construcao: borda destacada */
+  .card.current {
+    border-color: rgba(91, 157, 255, 0.5);
+  }
+
+  .meta {
+    font-family: "Inter", monospace;
+    font-size: clamp(13px, 1vw, 20px);
+    color: var(--dim);
+    margin-bottom: 1.2vh;
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    opacity: 0.6;
+  }
+
+  .line {
+    display: flex;
+    align-items: flex-start;
+    gap: 1.2vw;
+    margin: 0.7vh 0;
+    line-height: 1.32;
+  }
+
+  .lang {
+    flex-shrink: 0;
+    display: inline-block;
+    min-width: 2.6em;
+    font-family: "Inter", sans-serif;
+    font-size: clamp(16px, 1.5vw, 28px);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding-top: 0.25em;
+  }
+  .line.pt .lang { color: var(--pt); }
+  .line.es .lang { color: var(--es); }
+
+  .text {
+    flex: 1;
+    line-height: 1.28;
+    text-wrap: balance;
+  }
+  /* PT (origem) — discreto, contextual */
+  .line.src .text,
+  .line.pt .text {
+    font-size: clamp(16px, 1.8vw, 28px);
+    font-weight: 400;
+    color: var(--dim);
+    line-height: 1.4;
+  }
+  /* ES (tradução) — DESTAQUE PRINCIPAL, ~2x maior */
+  .line.tgt .text,
+  .line.es .text {
+    font-size: clamp(36px, 5.5vw, 96px);
+    font-weight: 600;
+    color: var(--fg);
+    letter-spacing: 0.005em;
+  }
+  /* Lang label do PT também fica menor */
+  .line.src .lang,
+  .line.pt .lang {
+    font-size: clamp(11px, 1vw, 16px);
+    padding-top: 0.15em;
+  }
+  /* Lang label do ES alinhado com texto maior */
+  .line.tgt .lang,
+  .line.es .lang {
+    padding-top: 0.4em;
+  }
+
+  .text.tentative {
+    color: var(--tentative);
+  }
+  .text.tentative::after {
+    content: "▌";
+    margin-left: 0.18em;
+    color: var(--tentative);
+    animation: caret 0.9s ease-in-out infinite;
+    font-weight: 300;
+  }
+  @keyframes caret {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.2; }
+  }
+
+  /* Frase atual em construcao — destaque ainda mais forte no ES */
+  .card.current .line.tgt .text,
+  .card.current .line.es .text { font-weight: 700; }
+
+  .empty {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--dim);
+    font-style: italic;
+    font-size: clamp(22px, 2.6vw, 44px);
+    opacity: 0.5;
+  }
+
+  /* Status pill */
+  .status-pill {
+    position: fixed;
+    top: 14px;
+    right: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.55);
+    color: var(--dim);
+    font-size: clamp(12px, 1vw, 18px);
+    font-family: "Inter", sans-serif;
+    font-weight: 600;
+    opacity: 0.65;
+    transition: opacity 0.25s ease, color 0.25s ease;
+    user-select: none;
+    z-index: 10;
+  }
+  .status-pill .icon { font-size: 1.1em; }
+  .status-pill.listening { color: #9aa7b8; opacity: 0.55; }
+  .status-pill.transcribing {
+    color: #ffb455;
+    opacity: 0.95;
+    animation: pulsePill 1.1s ease-in-out infinite;
+  }
+  .status-pill.translating { color: #5b9dff; opacity: 0.95; }
+  .status-pill.listo { color: #5fcf80; opacity: 0.9; }
+  .status-pill.idle { color: #6a6a6a; opacity: 0.4; }
+  .status-pill.error { color: #ff6b6b; opacity: 0.95; }
+  @keyframes pulsePill {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.04); }
+  }
+
+  .tag {
+    position: fixed;
+    top: 18px;
+    left: 18px;
+    color: var(--dim);
+    font-size: clamp(10px, 0.8vw, 14px);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    opacity: 0.3;
+    user-select: none;
+    font-family: "Inter", sans-serif;
+    font-weight: 600;
+    z-index: 10;
+  }
+
+  /* Badge do Modo Intérprete — discreto mas visível, pra audiência/operador
+     saber que o display está esperando unidades de sentido completas */
+  .interp-badge {
+    position: fixed;
+    top: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: var(--dim);
+    font-size: clamp(11px, 0.9vw, 15px);
+    letter-spacing: 0.04em;
+    opacity: 0.45;
+    user-select: none;
+    pointer-events: auto;
+    font-family: "Inter", sans-serif;
+    font-weight: 600;
+    z-index: 10;
+    padding: 4px 12px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    transition: opacity 0.3s ease;
+  }
+  .interp-badge:hover { opacity: 0.85; }
+  .interp-badge.hidden { display: none; }
+
+  .help {
+    position: fixed;
+    bottom: 14px;
+    left: 18px;
+    color: var(--dim);
+    font-size: clamp(10px, 0.75vw, 13px);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    user-select: none;
+    pointer-events: none;
+    font-family: "Inter", sans-serif;
+    z-index: 10;
+  }
+  body:hover .help { opacity: 0.35; }
+
+  .indicator {
+    position: fixed;
+    bottom: 18px;
+    right: 18px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--dim);
+    opacity: 0.4;
+    transition: background 0.2s, opacity 0.2s, box-shadow 0.2s;
+    z-index: 10;
+  }
+  .indicator.connected { background: var(--pt); opacity: 0.7; box-shadow: 0 0 8px rgba(96, 165, 250, 0.45); }
+  .indicator.error { background: #ff6b6b; opacity: 0.9; }
+
+  /* === Audio-alive 3-dot indicator ===
+     Mostra atividade do servidor (qualquer evento WS recente).
+     Pulsa quando há atividade < 3s atrás, idle se não. */
+  .alive-dots {
+    position: fixed;
+    bottom: 18px;
+    right: 42px;
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    height: 12px;
+    user-select: none;
+    pointer-events: none;
+  }
+  .alive-dots span {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--dim);
+    opacity: 0.25;
+    transition: opacity 0.4s ease, transform 0.4s ease;
+  }
+  .alive-dots.active span {
+    background: var(--pt);
+    opacity: 0.8;
+    animation: alivePulse 1.3s ease-in-out infinite;
+  }
+  .alive-dots.active span:nth-child(2) { animation-delay: 0.18s; }
+  .alive-dots.active span:nth-child(3) { animation-delay: 0.36s; }
+  @keyframes alivePulse {
+    0%, 100% { transform: scale(1); opacity: 0.55; }
+    50%       { transform: scale(1.35); opacity: 0.95; }
+  }
+
+  /* Panic mode — esconde tudo, só fica preto com hint discreto */
+  body.panic .stage,
+  body.panic .status-pill,
+  body.panic .tag,
+  body.panic .indicator { display: none; }
+  body.panic { background: #000; }
+
+  /* Fatigue stage 1 — após 20 min sem reset */
+  body.fatigue-1 {
+    --bg: #14161B;
+    --fg: #E8E6E1;
+  }
+  body.fatigue-1 .text { line-height: 1.38; }
+  /* Fatigue stage 2 — após 45 min */
+  body.fatigue-2 {
+    --bg: #1A1C22;
+    --fg: #DCD9D2;
+    --line-height-text: 1.65;
+  }
+  body.fatigue-2 .text { line-height: 1.55; }
+  body.fatigue-2 .card { padding: 2.6vh 2.8vw; }
+
+  /* Pause rule — separa cards quando hubo silêncio prolongado entre eles */
+  .card.after-pause {
+    position: relative;
+    margin-top: 4vh;
+  }
+  .card.after-pause::before {
+    content: "";
+    position: absolute;
+    top: -2vh;
+    left: 30%; right: 30%;
+    height: 1px;
+    background: var(--dim);
+    opacity: 0.2;
+  }
+  body.panic::after {
+    content: "•";
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #1a1a1a;
+    font-size: 32px;
+    opacity: 0.3;
+  }
+
+  /* Overlay flash (mute, etc) */
+  .flash-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    font-size: clamp(60px, 10vw, 160px);
+    font-weight: 700;
+    color: #ff6b6b;
+    letter-spacing: 0.05em;
+    animation: flashIn 0.2s ease-out;
+  }
+  @keyframes flashIn { from { opacity: 0; } to { opacity: 1; } }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+  <div class="empty" id="empty">Esperando…</div>
+</div>
+
+<div class="tag">PT → ES &middot; en vivo</div>
+<div class="interp-badge" id="interp-badge" title="Modo Intérprete activo — espera la frase completa antes de mostrar (como un intérprete humano de Libras). Pulsa 'I' para alternar.">🎭 Intérprete</div>
+<div class="status-pill listening" id="status-pill">
+  <span class="icon" id="status-icon">🎧</span>
+  <span id="status-text">Escuchando…</span>
+</div>
+<div class="help">F = completa &middot; +/− = fuente &middot; [ ] = tarjetas &middot; &lt; &gt; = pausa &middot; C = limpiar</div>
+<div class="indicator" id="indicator"></div>
+<div class="alive-dots" id="alive-dots">
+  <span></span><span></span><span></span>
+</div>
+
+<script>
+(function () {
+  const stage = document.getElementById("stage");
+  const emptyEl = document.getElementById("empty");
+  const indicator = document.getElementById("indicator");
+  const statusPill = document.getElementById("status-pill");
+  const statusIcon = document.getElementById("status-icon");
+  const statusText = document.getElementById("status-text");
+
+  // Quantos cards aparecem (incluindo o atual). Ajustável ao vivo com [ e ].
+  // Default 3 = foco máximo na frase atual + 2 anteriores.
+  // Cada incremento ([) sobe; ([)+[ baixa.
+  let MAX_VISIBLE = 3;
+
+  // Tempo MÍNIMO que um card precisa ficar visível antes de ser empurrado pra fora.
+  // Calculado dinamicamente baseado no número de palavras × 320ms/palavra.
+  // Cards "velhos demais" só saem quando outro novo chega.
+  const MS_PER_WORD = 320;
+  const MIN_LIFETIME_MS = 4500;  // mínimo absoluto (4.5s), independente de #palavras
+  const MAX_LIFETIME_MS = 15000; // máximo
+
+  // Throttle dos partials: o whisper streaming manda partials muito rápido
+  // (~100ms entre eles). Sem throttle, o display "pisca" palavra por palavra.
+  // 280ms = ~3-4 atualizações por segundo, fluido sem ofuscar.
+  const PARTIAL_THROTTLE_MS = 280;
+  let _lastPartialRender = 0;
+  let _pendingPartialTimer = null;
+  let _pendingPartialData = null;
+
+  // Hold pós-final: quando uma frase finaliza, ela continua DESTACADA no topo
+  // por X ms antes de ser empurrada pra trás pelo próximo partial. Dá tempo da
+  // audiência terminar de ler antes do display começar a pintar a próxima.
+  const HOLD_AFTER_FINAL_MS = 2800;
+  let _holdUntilTs = 0;
+
+  // ===== MODO INTÉRPRETE =====
+  // Inspirado em intérpretes humanos de Libras / interpretação simultânea:
+  //   1. Ignora COMPLETAMENTE os partials do Whisper (sem texto piscando palavra-a-palavra)
+  //   2. Só renderiza quando chega `final` (frase completa, com VAD silêncio confirmado)
+  //   3. Cada final fica destacado por tempo proporcional ao tamanho (palavras × 380ms)
+  //   4. Próximo final que chega DURANTE o hold vai pra fila e espera sua vez
+  //   5. Quando fila acumula (pastor falando rápido), encurta o hold proporcionalmente
+  //
+  // CONTROLE: Operador (no PC) decide o modo. Todos os displays (audiência)
+  // recebem o estado via WS broadcast (`{type:"display-config", interpreter_mode:bool}`).
+  // Display NÃO escolhe localmente — só aplica o que o operador define.
+  // Default inicial = true (caso WS demore a chegar; corrigido em ~10ms).
+  let interpreterMode = true;
+  const INTERP_MS_PER_WORD = 380;
+  const INTERP_MIN_HOLD_MS = 4500;
+  const INTERP_MAX_HOLD_MS = 14000;
+  const _finalQueue = [];
+  let _finalQueueTimer = null;
+
+  const STATUS_STATES = {
+    listening:    { icon: "🎧", text: "Escuchando…" },
+    transcribing: { icon: "💬", text: "Pastor habla…" },
+    translating:  { icon: "🌐", text: "Traduciendo…" },
+    listo:        { icon: "✓",  text: "Listo" },
+    idle:         { icon: "💤", text: "En pausa" },
+    error:        { icon: "⚠",  text: "Sin conexión" },
+  };
+  let statusResetTimer = null;
+  function setStatus(state) {
+    const cfg = STATUS_STATES[state] || STATUS_STATES.listening;
+    statusPill.className = "status-pill " + state;
+    statusIcon.textContent = cfg.icon;
+    statusText.textContent = cfg.text;
+  }
+  function setStatusBriefly(state, ms, fallback) {
+    setStatus(state);
+    if (statusResetTimer) clearTimeout(statusResetTimer);
+    statusResetTimer = setTimeout(() => setStatus(fallback || "listening"), ms);
+  }
+  function setIndicator(s) {
+    indicator.className = "indicator" + (s ? " " + s : "");
+  }
+
+  // Estado da frase atual (em construcao)
+  let currentSeq = -1;
+  let currentLastPartial = []; // palavras do ultimo partial (pra LocalAgreement-2)
+  let currentCommitted = [];   // palavras estaveis (committed)
+  let currentTentative = [];   // palavras volateis
+  let currentMeta = null;      // {ts, src, tgt, duration, stt, mt}
+  let currentSrcText = "";
+
+  // Cards finalizados (committed entries)
+  // Ordem: index 0 = mais recente
+  const committedCards = [];
+
+  // Font scale (controlado por +/-)
+  let fontScale = 1.0;
+  function applyFontScale() {
+    document.documentElement.style.setProperty(
+      "--scale", String(fontScale)
+    );
+    // Aplica diretamente nos elementos de texto via CSS variable
+    stage.style.fontSize = (fontScale * 100) + "%";
+  }
+  applyFontScale();
+
+  // === Tokenize + LCP pro LocalAgreement-2 ===
+  function tokenize(t) {
+    return (t || "").trim().split(/\s+/).filter(w => w.length > 0);
+  }
+  function longestCommonPrefix(a, b) {
+    let i = 0;
+    const n = Math.min(a.length, b.length);
+    while (i < n) {
+      const wa = a[i].replace(/[.,!?;:]+$/, "").toLowerCase();
+      const wb = b[i].replace(/[.,!?;:]+$/, "").toLowerCase();
+      if (wa !== wb) break;
+      i++;
+    }
+    return i;
+  }
+
+  function hideEmpty() {
+    if (emptyEl && emptyEl.parentNode) emptyEl.remove();
+  }
+
+  function renderMeta(data) {
+    const stt = (data.stt_s || 0).toFixed(1);
+    const mt = (data.mt_s || 0).toFixed(2);
+    const dur = (data.duration_s || 0).toFixed(1);
+    return `${data.ts}  ${data.src_lang}→${data.tgt_lang}  audio ${dur}s  stt ${stt}s  mt ${mt}s`;
+  }
+
+  function buildCard({meta, srcLang, srcText, tgtLang, committed, tentative, isCurrent, afterPause}) {
+    const card = document.createElement("div");
+    card.className = "card"
+      + (isCurrent ? " current" : "")
+      + (afterPause ? " after-pause" : "");
+
+    const metaDiv = document.createElement("div");
+    metaDiv.className = "meta";
+    metaDiv.textContent = meta;
+    card.appendChild(metaDiv);
+
+    const srcLine = document.createElement("div");
+    srcLine.className = "line " + srcLang.toLowerCase();
+    const srcLangSpan = document.createElement("span");
+    srcLangSpan.className = "lang";
+    srcLangSpan.textContent = srcLang;
+    srcLine.appendChild(srcLangSpan);
+    const srcTextSpan = document.createElement("span");
+    srcTextSpan.className = "text";
+    srcTextSpan.textContent = srcText;
+    srcLine.appendChild(srcTextSpan);
+    card.appendChild(srcLine);
+
+    const tgtLine = document.createElement("div");
+    tgtLine.className = "line " + tgtLang.toLowerCase();
+    const tgtLangSpan = document.createElement("span");
+    tgtLangSpan.className = "lang";
+    tgtLangSpan.textContent = tgtLang;
+    tgtLine.appendChild(tgtLangSpan);
+
+    // Texto destino: committed em normal + tentative em opacidade reduzida
+    const tgtTextSpan = document.createElement("span");
+    if (tentative && tentative.length) {
+      // Mistura committed + tentative
+      tgtTextSpan.className = "text";
+      const commitWord = document.createElement("span");
+      commitWord.textContent = (committed || []).join(" ");
+      tgtTextSpan.appendChild(commitWord);
+      if ((committed || []).length) tgtTextSpan.appendChild(document.createTextNode(" "));
+      const tentSpan = document.createElement("span");
+      tentSpan.className = "tentative";
+      tentSpan.textContent = tentative.join(" ");
+      tgtTextSpan.appendChild(tentSpan);
+    } else {
+      tgtTextSpan.className = "text";
+      tgtTextSpan.textContent = (committed || []).join(" ");
+    }
+    tgtLine.appendChild(tgtTextSpan);
+    card.appendChild(tgtLine);
+
+    return card;
+  }
+
+  function renderAll() {
+    hideEmpty();
+    // Mais recente em cima — atual no topo se existir, depois committed
+    stage.innerHTML = "";
+
+    if (currentMeta && (currentCommitted.length || currentTentative.length || currentSrcText)) {
+      const card = buildCard({
+        meta: currentMeta.text,
+        srcLang: currentMeta.srcLang.toUpperCase(),
+        srcText: currentSrcText,
+        tgtLang: currentMeta.tgtLang.toUpperCase(),
+        committed: currentCommitted,
+        tentative: currentTentative,
+        isCurrent: true,
+      });
+      stage.appendChild(card);
+    }
+
+    const slotsLeft = MAX_VISIBLE - (currentMeta ? 1 : 0);
+    const limit = Math.min(slotsLeft, committedCards.length);
+    for (let i = 0; i < limit; i++) {
+      const c = committedCards[i];
+      const card = buildCard({
+        meta: c.meta,
+        srcLang: c.srcLang.toUpperCase(),
+        srcText: c.srcText,
+        tgtLang: c.tgtLang.toUpperCase(),
+        committed: tokenize(c.tgtText),
+        tentative: [],
+        isCurrent: false,
+        afterPause: c.afterPause,
+      });
+      // Idade visual: i=0 é o mais novo committed, i=N é o mais antigo.
+      // Aplica fade gradual: age-1, age-2, age-3...
+      // Pula age-0 (mais recente fica em opacidade plena).
+      const ageStage = Math.min(5, i);
+      if (ageStage > 0) card.classList.add("age-" + ageStage);
+      stage.appendChild(card);
+    }
+  }
+
+  let _lastCommitTs = 0;
+  function commitCurrentAsCommitted() {
+    if (!currentMeta) return;
+    const tgtText = [...currentCommitted, ...currentTentative].join(" ");
+    if (!tgtText && !currentSrcText) return;
+    // Se houve pausa >2.5s desde o último commit, marca pra desenhar a linha separadora
+    const now = Date.now();
+    const isAfterPause = _lastCommitTs > 0 && (now - _lastCommitTs) > 2500;
+    _lastCommitTs = now;
+    // Calcula tempo mínimo de leitura baseado em palavras
+    const wordCount = tokenize(tgtText).length;
+    const readingMs = Math.min(
+      MAX_LIFETIME_MS,
+      Math.max(MIN_LIFETIME_MS, wordCount * MS_PER_WORD)
+    );
+    committedCards.unshift({
+      meta: currentMeta.text,
+      srcLang: currentMeta.srcLang,
+      srcText: currentSrcText,
+      tgtLang: currentMeta.tgtLang,
+      tgtText: tgtText,
+      afterPause: isAfterPause,
+      committedAt: now,
+      readingMs: readingMs,
+    });
+    // Permite manter mais cards que MAX_VISIBLE temporariamente se ainda estão
+    // dentro do tempo mínimo de leitura. Só corta os que já cumpriram o tempo.
+    if (committedCards.length > MAX_VISIBLE) {
+      // Mantém até MAX_VISIBLE+2 se os mais antigos ainda não cumpriram tempo mínimo
+      const cutoffIdx = Math.min(committedCards.length, MAX_VISIBLE + 2);
+      for (let i = MAX_VISIBLE; i < cutoffIdx; i++) {
+        const c = committedCards[i];
+        if (!c) continue;
+        const age = now - c.committedAt;
+        if (age > c.readingMs) {
+          committedCards.length = i;
+          break;
+        }
+      }
+      // Hard cap em MAX_VISIBLE+2
+      if (committedCards.length > MAX_VISIBLE + 2) {
+        committedCards.length = MAX_VISIBLE + 2;
+      }
+    }
+    currentSeq = -1;
+    currentLastPartial = [];
+    currentCommitted = [];
+    currentTentative = [];
+    currentMeta = null;
+    currentSrcText = "";
+  }
+
+  function ensureCurrent(data) {
+    if (data.seq !== currentSeq) {
+      // Frase atual fechou → vira committed
+      if (currentMeta) commitCurrentAsCommitted();
+      currentSeq = data.seq;
+      currentLastPartial = [];
+      currentCommitted = [];
+      currentTentative = [];
+    }
+    currentMeta = {
+      text: renderMeta(data),
+      srcLang: data.src_lang,
+      tgtLang: data.tgt_lang,
+    };
+    currentSrcText = data.src_text || "";
+  }
+
+  function _applyPartialNow(data) {
+    ensureCurrent(data);
+    const newWords = tokenize(data.tgt_text);
+    if (currentLastPartial.length > 0) {
+      const lcp = longestCommonPrefix(currentLastPartial, newWords);
+      currentCommitted = newWords.slice(0, lcp);
+      currentTentative = newWords.slice(lcp);
+    } else {
+      currentCommitted = [];
+      currentTentative = newWords;
+    }
+    currentLastPartial = newWords;
+    renderAll();
+    setStatus("transcribing");
+    _lastPartialRender = Date.now();
+  }
+
+  function showPartial(data) {
+    // === MODO INTÉRPRETE: ignora completamente partials ===
+    // Intérprete humano não traduz palavra por palavra — espera a unidade de
+    // sentido completa. Em modo intérprete pulamos toda a renderização de
+    // partials e só processamos finals (sense units).
+    if (interpreterMode) {
+      // Mas atualiza o status visual pra "transcrevendo" pra audiência saber
+      // que pastor está falando (mesmo sem mostrar o texto em construção).
+      setStatus("transcribing");
+      return;
+    }
+
+    // Throttle: se mandou outro partial recentemente, agenda update mas não pinta agora.
+    // Mas — se a frase mudou (seq diferente do atual), pinta imediatamente.
+    // Também respeita hold pós-final: se uma frase final acabou de chegar, segura
+    // o próximo partial pra dar tempo da audiência ler.
+    const now = Date.now();
+    const isNewPhrase = data.seq !== currentSeq;
+    const sinceLastRender = now - _lastPartialRender;
+    const withinHold = now < _holdUntilTs;
+
+    if (isNewPhrase && withinHold) {
+      // Hold ativo + frase nova chegou: agenda pintura pro fim do hold
+      _pendingPartialData = data;
+      if (_pendingPartialTimer) clearTimeout(_pendingPartialTimer);
+      _pendingPartialTimer = setTimeout(() => {
+        if (_pendingPartialData) _applyPartialNow(_pendingPartialData);
+        _pendingPartialData = null;
+        _pendingPartialTimer = null;
+      }, _holdUntilTs - now);
+      return;
+    }
+
+    if (!isNewPhrase && sinceLastRender < PARTIAL_THROTTLE_MS) {
+      // Throttle: guarda o partial mais recente, agenda pintura no próximo slot.
+      _pendingPartialData = data;
+      if (!_pendingPartialTimer) {
+        _pendingPartialTimer = setTimeout(() => {
+          if (_pendingPartialData) _applyPartialNow(_pendingPartialData);
+          _pendingPartialData = null;
+          _pendingPartialTimer = null;
+        }, PARTIAL_THROTTLE_MS - sinceLastRender);
+      }
+      return;
+    }
+
+    // Pode pintar agora
+    if (_pendingPartialTimer) { clearTimeout(_pendingPartialTimer); _pendingPartialTimer = null; }
+    _pendingPartialData = null;
+    _applyPartialNow(data);
+  }
+
+  function showFinal(data) {
+    // Cancela qualquer pintura pendente — o final tem precedência absoluta
+    if (_pendingPartialTimer) { clearTimeout(_pendingPartialTimer); _pendingPartialTimer = null; }
+    _pendingPartialData = null;
+
+    if (interpreterMode) {
+      return _showFinalInterpreter(data);
+    }
+
+    ensureCurrent(data);
+    const words = tokenize(data.tgt_text);
+    currentCommitted = words;
+    currentTentative = [];
+    currentLastPartial = words;
+    renderAll();
+    setStatusBriefly("listo", 1400, "listening");
+    // Inicia hold: próximas pinturas de partials esperam HOLD_AFTER_FINAL_MS
+    // (ou o valor customizado via hotkey < / >)
+    const holdMs = (typeof window.__holdMs === "number") ? window.__holdMs : HOLD_AFTER_FINAL_MS;
+    _holdUntilTs = Date.now() + holdMs;
+  }
+
+  // ===== MODO INTÉRPRETE: pipeline de finais =====
+  // Cada final chega e é colocado na fila. Se o hold do anterior ainda não
+  // expirou, espera. Se a fila acumular (pastor falando rápido), encurta o
+  // hold proporcionalmente — mimica intérprete que acelera sob pressão.
+  function _showFinalInterpreter(data) {
+    _finalQueue.push(data);
+    _processInterpreterQueue();
+  }
+
+  function _processInterpreterQueue() {
+    if (_finalQueueTimer) return;  // já tem timer agendado, ele vai consumir
+    if (_finalQueue.length === 0) return;
+    const now = Date.now();
+    const wait = Math.max(0, _holdUntilTs - now);
+    if (wait > 0) {
+      _finalQueueTimer = setTimeout(() => {
+        _finalQueueTimer = null;
+        _processInterpreterQueue();
+      }, wait);
+      return;
+    }
+    const data = _finalQueue.shift();
+    _renderInterpreterFinal(data);
+    // Agenda processar o próximo da fila quando o hold deste expirar
+    if (_finalQueue.length > 0) {
+      const nextWait = Math.max(0, _holdUntilTs - Date.now());
+      _finalQueueTimer = setTimeout(() => {
+        _finalQueueTimer = null;
+        _processInterpreterQueue();
+      }, nextWait);
+    }
+  }
+
+  function _renderInterpreterFinal(data) {
+    ensureCurrent(data);
+    const words = tokenize(data.tgt_text);
+    currentCommitted = words;
+    currentTentative = [];
+    currentLastPartial = words;
+    renderAll();
+    setStatusBriefly("listo", 1400, "listening");
+    // Hold proporcional ao tamanho da frase (em palavras) — frase grande dá
+    // mais tempo de leitura. Mas se fila acumular, encurta dinamicamente:
+    // quanto maior backlog, menor o hold (pra dar conta de pastor falando rápido).
+    let baseMs = Math.max(INTERP_MIN_HOLD_MS,
+                          Math.min(INTERP_MAX_HOLD_MS, words.length * INTERP_MS_PER_WORD));
+    const backlog = _finalQueue.length;
+    if (backlog >= 2) {
+      // Acelera: cada item adicional na fila reduz 20% do hold (mínimo 35%)
+      const factor = Math.max(0.35, 1 - 0.2 * backlog);
+      baseMs = Math.round(baseMs * factor);
+    }
+    _holdUntilTs = Date.now() + baseMs;
+  }
+
+  function setPanic(on) {
+    document.body.classList.toggle("panic", !!on);
+  }
+
+  // ===== Audio-alive 3-dot heartbeat =====
+  const aliveDots = document.getElementById("alive-dots");
+  let _aliveTimer = null;
+  function bumpAlive() {
+    if (!aliveDots) return;
+    aliveDots.classList.add("active");
+    if (_aliveTimer) clearTimeout(_aliveTimer);
+    _aliveTimer = setTimeout(() => aliveDots.classList.remove("active"), 3000);
+  }
+
+  // ===== Fatigue mitigation =====
+  // Tracks session start. Estágios em 20min (1) e 45min (2).
+  let sessionStart = Date.now();
+  let fatigueEnabled = true;
+  let lastFatigueStage = 0;
+  function updateFatigueStage() {
+    if (!fatigueEnabled) {
+      document.body.classList.remove("fatigue-1", "fatigue-2");
+      return;
+    }
+    const min = (Date.now() - sessionStart) / 60000;
+    let stage = 0;
+    if (min >= 45) stage = 2;
+    else if (min >= 20) stage = 1;
+    if (stage !== lastFatigueStage) {
+      document.body.classList.toggle("fatigue-1", stage === 1);
+      document.body.classList.toggle("fatigue-2", stage === 2);
+      lastFatigueStage = stage;
+    }
+  }
+  setInterval(updateFatigueStage, 30 * 1000);  // check a cada 30s
+  let _flashTimer = null;
+  function flashOverlay(text, durationMs) {
+    if (_flashTimer) clearTimeout(_flashTimer);
+    let overlay = document.querySelector(".flash-overlay");
+    if (!overlay) {
+      overlay = document.createElement("div");
+      overlay.className = "flash-overlay";
+      document.body.appendChild(overlay);
+    }
+    overlay.textContent = text;
+    overlay.style.display = "flex";
+    _flashTimer = setTimeout(() => {
+      overlay.style.display = "none";
+    }, durationMs);
+  }
+
+  function clearAll() {
+    currentSeq = -1;
+    currentLastPartial = [];
+    currentCommitted = [];
+    currentTentative = [];
+    currentMeta = null;
+    currentSrcText = "";
+    committedCards.length = 0;
+    stage.innerHTML = "";
+    const ph = document.createElement("div");
+    ph.className = "empty";
+    ph.id = "empty";
+    ph.textContent = "Esperando…";
+    stage.appendChild(ph);
+  }
+
+  // === WebSocket ===
+  let reconnectDelay = 500;
+  function connect() {
+    const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
+    let ws;
+    try {
+      ws = new WebSocket(`${wsProto}//${location.host}/ws/display`);
+    } catch (e) {
+      setIndicator("error");
+      setStatus("error");
+      setTimeout(connect, reconnectDelay);
+      reconnectDelay = Math.min(reconnectDelay * 2, 5000);
+      return;
+    }
+    ws.onopen = () => {
+      setIndicator("connected");
+      setStatus("listening");
+      reconnectDelay = 500;
+    };
+    ws.onmessage = (ev) => {
+      // Qualquer mensagem do servidor = sinal de vida — pulsa os 3 dots
+      bumpAlive();
+      try {
+        const data = JSON.parse(ev.data);
+        if (data.type === "partial") {
+          showPartial(data);
+        } else if (data.type === "final") {
+          showFinal(data);
+        } else if (data.type === "result") {
+          showFinal(data);
+        } else if (data.type === "phrase-detected") {
+          if (data.kind === "final" || !data.kind) setStatus("transcribing");
+        } else if (data.type === "clear") {
+          clearAll();
+        } else if (data.type === "panic") {
+          setPanic(data.on);
+        } else if (data.type === "muted") {
+          flashOverlay("MUTE " + Math.round((data.duration_ms || 0)/1000) + "s",
+                       data.duration_ms || 5000);
+        } else if (data.type === "display-config") {
+          // Operador definiu modo intérprete (ou outras configs do display)
+          // — todos os clientes /ws/display recebem e aplicam.
+          if (typeof data.interpreter_mode === "boolean") {
+            const wasInterpreter = interpreterMode;
+            interpreterMode = data.interpreter_mode;
+            if (wasInterpreter !== interpreterMode) {
+              // Limpa fila ao trocar de modo
+              _finalQueue.length = 0;
+              if (_finalQueueTimer) { clearTimeout(_finalQueueTimer); _finalQueueTimer = null; }
+              updateInterpreterIndicator();
+            } else {
+              updateInterpreterIndicator();
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("display parse fail", e);
+      }
+    };
+    ws.onerror = () => { setIndicator("error"); setStatus("error"); };
+    ws.onclose = () => {
+      setIndicator("error");
+      setStatus("error");
+      setTimeout(connect, reconnectDelay);
+      reconnectDelay = Math.min(reconnectDelay * 2, 5000);
+    };
+  }
+
+  function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen?.().catch(() => {});
+    } else {
+      document.exitFullscreen?.().catch(() => {});
+    }
+  }
+
+  document.addEventListener("keydown", (e) => {
+    const k = e.key;
+    if (k === "f" || k === "F") {
+      toggleFullscreen();
+    } else if (k === "+" || k === "=") {
+      fontScale = Math.min(fontScale + 0.1, 2.5);
+      applyFontScale();
+    } else if (k === "-" || k === "_") {
+      fontScale = Math.max(fontScale - 0.1, 0.5);
+      applyFontScale();
+    } else if (k === "c" || k === "C") {
+      clearAll();
+    } else if (k === "t" || k === "T") {
+      fatigueEnabled = !fatigueEnabled;
+      sessionStart = Date.now();  // reseta contagem
+      lastFatigueStage = -1;
+      updateFatigueStage();
+      flashOverlay(
+        fatigueEnabled ? "Fatigue: ON" : "Fatigue: OFF",
+        900
+      );
+    } else if (k === "r" || k === "R") {
+      // Reset do timer de fadiga (operador acabou de descansar)
+      sessionStart = Date.now();
+      lastFatigueStage = -1;
+      updateFatigueStage();
+      flashOverlay("Timer resetado", 700);
+    } else if (k === "[") {
+      MAX_VISIBLE = Math.max(2, MAX_VISIBLE - 1);
+      try { localStorage.setItem("display.maxVisible", String(MAX_VISIBLE)); } catch(_) {}
+      renderAll();
+      flashOverlay("Cards: " + MAX_VISIBLE, 700);
+    } else if (k === "]") {
+      MAX_VISIBLE = Math.min(10, MAX_VISIBLE + 1);
+      try { localStorage.setItem("display.maxVisible", String(MAX_VISIBLE)); } catch(_) {}
+      renderAll();
+      flashOverlay("Cards: " + MAX_VISIBLE, 700);
+    } else if (k === "<" || k === ",") {
+      // Reduz hold pós-final em 500ms (display mais reativo, menos pausa)
+      window.__holdMs = Math.max(0, (window.__holdMs ?? HOLD_AFTER_FINAL_MS) - 500);
+      try { localStorage.setItem("display.holdMs", String(window.__holdMs)); } catch(_) {}
+      flashOverlay("Pausa: " + (window.__holdMs/1000).toFixed(1) + "s", 800);
+    } else if (k === ">" || k === ".") {
+      // Aumenta hold pós-final em 500ms (mais tempo de leitura por frase)
+      window.__holdMs = Math.min(8000, (window.__holdMs ?? HOLD_AFTER_FINAL_MS) + 500);
+      try { localStorage.setItem("display.holdMs", String(window.__holdMs)); } catch(_) {}
+      flashOverlay("Pausa: " + (window.__holdMs/1000).toFixed(1) + "s", 800);
+    }
+    // Hotkey "I" foi REMOVIDA: modo intérprete agora é controlado pelo operador
+    // (PC), não localmente no display. Cada celular receberia um modo diferente
+    // se fosse local — caos. Operador é a fonte de verdade.
+  });
+
+  // Mostra/esconde o badge "🎭 Intérprete" no topo
+  function updateInterpreterIndicator() {
+    const el = document.getElementById("interp-badge");
+    if (!el) return;
+    if (interpreterMode) {
+      el.classList.remove("hidden");
+      el.textContent = "🎭 Intérprete";
+    } else {
+      el.classList.add("hidden");
+    }
+  }
+  updateInterpreterIndicator();
+
+  // Recupera MAX_VISIBLE salvo (operador customizou)
+  try {
+    const saved = parseInt(localStorage.getItem("display.maxVisible") || "", 10);
+    if (saved >= 2 && saved <= 10) MAX_VISIBLE = saved;
+  } catch(_) {}
+
+  // Recupera HOLD_MS salvo
+  try {
+    const savedHold = parseInt(localStorage.getItem("display.holdMs") || "", 10);
+    if (savedHold >= 0 && savedHold <= 8000) window.__holdMs = savedHold;
+  } catch(_) {}
+
+  // Query params: ?cards=N e ?hold=ms
+  try {
+    const params = new URLSearchParams(location.search);
+    const fromUrl = parseInt(params.get("cards") || "", 10);
+    if (fromUrl >= 2 && fromUrl <= 10) MAX_VISIBLE = fromUrl;
+    const holdUrl = parseInt(params.get("hold") || "", 10);
+    if (holdUrl >= 0 && holdUrl <= 8000) window.__holdMs = holdUrl;
+  } catch(_) {}
+  document.addEventListener("dblclick", toggleFullscreen);
+
+  connect();
+})();
+</script>
+</body>
+</html>

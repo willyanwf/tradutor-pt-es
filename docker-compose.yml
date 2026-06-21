@@ -1,0 +1,25 @@
+# Tradutor PT->ES — roda o servidor na porta 3080 (modo CPU).
+#
+#   docker compose up -d --build      # sobe (build na 1ª vez é demorado:
+#                                       baixa Whisper small + NLLB ~1.1GB)
+#   docker compose logs -f            # acompanha
+#   abra:  http://SEU_HOST:3080/v2    # tela da audiência
+#
+# No Coolify: importe este compose; a porta interna é 3080 e o Coolify
+# cuida do domínio/HTTPS (ex: tradutor.siaccon.com.br).
+services:
+  tradutor:
+    build: .
+    container_name: tradutor
+    restart: unless-stopped
+    ports:
+      - "3080:3080"
+    environment:
+      # Modo CPU (Coolify não tem GPU). Pra trocar não precisa rebuildar.
+      PORT: "3080"
+      DEVICE: "cpu"          # 'cuda' só se a máquina tiver GPU NVIDIA
+      MODEL: "small"         # small=rápido em CPU; large-v3 só com GPU
+      COMPUTE_TYPE: "int8"   # int8=leve em CPU; float16=GPU
+      BACKEND: "marian"      # NLLB local; 'google' = online (sem modelo)
+      PARTIAL_MS: "1500"
+      SILENCE_MS: "700"

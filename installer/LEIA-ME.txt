@@ -1,0 +1,162 @@
+==========================================================
+  TRADUTOR PT-ES — Igreja Batista Graça e Paz
+  Instalação no computador da igreja
+==========================================================
+
+Esse programa traduz o sermão do pastor em tempo real do
+português pro espanhol. As pessoas acompanham a tradução
+no celular delas.
+
+
+O QUE VOCÊ PRECISA
+------------------
+ * Windows 10 ou 11 (32 ou 64 bits)
+ * Internet (durante a instalação e durante o sermão)
+ * 2 GB de espaço livre no disco
+ * 1 cabo P2 (3.5mm) OU microfone sem fio (USB / wireless)
+
+
+COMO INSTALAR (uma vez só)
+--------------------------
+
+ 1. Descompacte essa pasta inteira em algum lugar
+    (ex: Documentos\TradutorIgreja)
+
+ 2. Abra a pasta "installer"
+
+ 3. Duplo-clique em:  install.bat
+
+ 4. A janela preta vai aparecer. NÃO FECHE ela.
+    Vai demorar uns 10-15 minutos no total:
+    - Baixar Python                 (2 min)
+    - Instalar componentes          (5 min)
+    - Baixar os modelos de tradução (5-10 min)
+
+ 5. No fim, vai aparecer "INSTALAÇÃO COMPLETA!"
+    Um atalho chamado "Tradutor PT-ES" aparece na sua
+    área de trabalho.
+
+ 6. Aperte qualquer tecla pra fechar o instalador.
+
+
+COMO USAR (todo culto)
+----------------------
+
+ 1. Plugue o microfone (P2 ou USB) no PC
+
+ 2. Duplo-clique no atalho "Tradutor PT-ES" da
+    área de trabalho
+
+ 3. Espera a tela do tradutor abrir no navegador
+    (uns 30-60 segundos na primeira vez,
+     depois 10-15s)
+
+ 4. Clica no botão "🎤 Testar mic" no topo
+    Faça uma gravação de 5 segundos com cada
+    microfone disponível.
+    O sistema vai dar uma nota (A, B, C ou D).
+    Use o mic com a melhor nota.
+
+ 5. Clica em "Iniciar"
+
+ 6. Fale no microfone — a tradução vai aparecer.
+
+ 7. Mostre pra audiência o link da tela pública
+    (você vê o link em cima da tela do tradutor).
+    Quem abrir o link no celular vê a tradução
+    ao vivo em espanhol.
+
+
+COMO COMPARTILHAR COM AUDIÊNCIA
+-------------------------------
+
+  No tradutor aberto, clique em "📺 Tela pública".
+  Vai abrir uma janela com a tela que a audiência verá.
+
+  O endereço dessa janela é o link que você compartilha.
+  Mande pelo WhatsApp do grupo da igreja antes do culto.
+
+
+TRADUZIR UMA LIVE DO YOUTUBE (sem microfone)
+--------------------------------------------
+
+  Se em vez de microfone você quer traduzir o áudio de uma
+  LIVE do YouTube (ou qualquer som tocando no PC):
+
+  FORMA SIMPLES (funciona na maioria dos PCs):
+   1. Abra a live do YouTube e dê PLAY.
+   2. No tradutor, no menu de fonte de áudio, escolha:
+      "🔴 Capturar áudio do computador (YouTube/live)"
+   3. Clique em Iniciar. Pronto — ele capta o som digital,
+      sem microfone, sem eco.
+   4. Pode MUTAR a caixinha (botão de mudo) que continua
+      captando normalmente.
+
+   OBS: não use "volume zero" (arrastar pro 0) — em alguns
+   PCs isso também muta a captura. Use o botão de MUDO.
+
+  FORMA 100% GARANTIDA (sem nenhum som físico) — VB-CABLE:
+   Se quiser garantir que NADA sai na caixinha e a captura
+   é perfeita, instale o VB-CABLE (programa gratuito):
+
+   1. Baixe em:  vb-audio.com/Cable
+   2. Descompacte, clique direito em VBCABLE_Setup_x64.exe
+      → "Executar como administrador" → Install Driver
+   3. Reinicie o PC.
+   4. Botão direito no ícone de som → Configurações de som
+      → Mixer de volume → no navegador, mude a saída para
+      "CABLE Input".
+   5. (Pra você ouvir junto) Configurações de som →
+      Mais configurações → aba Gravação → CABLE Output →
+      Propriedades → aba Escutar → marque "Escutar este
+      dispositivo" → escolha sua caixinha/fone.
+   6. No tradutor, escolha a fonte "CABLE Output" no menu
+      de áudio do sistema.
+
+   Resultado: o YouTube toca, nada sai na caixinha (a menos
+   que você ative o "Escutar"), e o tradutor capta perfeito.
+
+  ATENÇÃO — música/louvor: durante louvor instrumental, o
+  tradutor pode gerar legendas estranhas ou nenhuma legenda.
+  É normal — o foco é a pregação falada.
+
+
+SE DER PROBLEMA
+---------------
+
+  ❌ "install.bat falhou ao baixar Python"
+     → Sua internet caiu. Tente de novo.
+
+  ❌ "Tela do tradutor não abre"
+     → Aguarde até 1 minuto na primeira vez.
+       Se não abrir, abra manualmente:
+       http://localhost:8766
+
+  ❌ "Microfone não pega o som"
+     → Use "🎤 Testar mic" pra ver qual mic está
+       funcionando.
+
+  ❌ "Tradução está muito lenta"
+     → PC sem GPU é mais lento mesmo. Normal demorar
+       2-4 segundos por frase. Pra ficar mais rápido,
+       precisa de PC com placa de vídeo NVIDIA.
+
+
+COMO DESINSTALAR
+----------------
+
+  Apaga a pasta:
+    %USERPROFILE%\TradutorIgreja
+
+  Apaga o atalho da área de trabalho.
+
+
+DÚVIDAS
+-------
+
+  Fale com o responsável que mandou esse pacote.
+
+
+==========================================================
+  Deus abençoe! ✝
+==========================================================

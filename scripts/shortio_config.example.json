@@ -1,0 +1,6 @@
+{
+  "_comentario": "Copie este arquivo para shortio_config.json e preencha. NUNCA commite o arquivo real (ele está no .gitignore).",
+  "api_key": "sk_SUA_CHAVE_SECRETA_DO_SHORTIO_AQUI",
+  "domain": "te0u7om.s.gy",
+  "path": "TraducaoIgrejaBatistaGracaPaz"
+}

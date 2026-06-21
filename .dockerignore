@@ -1,0 +1,35 @@
+# Mantém o contexto de build pequeno + evita mandar segredos pro daemon
+.git/
+.gitignore
+
+# dados/modelos/logs locais (o build baixa os modelos do zero)
+data/
+
+# artefatos de build
+scripts/dist/
+scripts/build/
+**/__pycache__/
+*.pyc
+*.pyo
+*.spec
+
+# segredos / config local
+scripts/tunnel/
+scripts/shortio_config.json
+scripts/church_sender_config.json
+scripts/state.json
+*.pem
+*.token
+.env
+
+# logs / db
+*.log
+*.db
+*.db-shm
+*.db-wal
+
+# windows-only / não usado no container
+scripts/tradutor_app.py
+scripts/splash.py
+scripts/make_icon.py
+scripts/install_shortcut.ps1

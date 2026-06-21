@@ -1,0 +1,36 @@
+# ===== Segredos / config local — NUNCA commitar =====
+# (comentários SEMPRE em linha própria — inline quebra a regra)
+
+# chave da API do short.io
+scripts/shortio_config.json
+# config local do app da igreja
+scripts/church_sender_config.json
+# estado de runtime
+scripts/state.json
+# rathole (abandonado) — contém token + IP do VPS
+scripts/tunnel/
+# certificados / chaves
+*.pem
+.env
+*.token
+
+# ===== Artefatos de build (PyInstaller) =====
+scripts/dist/
+scripts/build/
+*.spec
+__pycache__/
+*.pyc
+*.pyo
+
+# ===== Dados de runtime, modelos e logs (grandes/regeneráveis) =====
+# modelo Marian + cache SQLite + logs
+data/
+*.log
+*.db
+*.db-shm
+*.db-wal
+
+# ===== Diversos =====
+.DS_Store
+Thumbs.db
+*.tmp

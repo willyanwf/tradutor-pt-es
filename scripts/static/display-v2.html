@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<title>Traducción en vivo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ================================================================
+   DISPLAY v2 — append-only CART-style com modo "A mi ritmo"
+   Resolve a queixa: "texto muda enquanto leio, me perco, desisto".
+
+   Princípios da pesquisa (workflow multi-agente):
+   - WRITE-ONCE: frase exibida nunca muda de conteúdo nem posição
+   - APPEND-ONLY DOM: stage.innerHTML = "" é PROIBIDO. Só appendChild.
+   - BOTTOM-ANCHORED: âncora geométrica no rodapé (igual chat/CART)
+   - STICKY-BOTTOM INTELIGENTE: rolar pra cima trava auto-scroll
+   - MODO "A MI RITMO": usuário toca pra avançar (decisão do leitor)
+   - Atkinson Hyperlegible: criada pra leitura difícil
+   - prefers-reduced-motion: respeitado
+   ================================================================ */
+:root {
+  --bg: #0b0b0c;
+  --fg: #fafafa;
+  --dim: #9aa0a6;
+  --accent: #5b9dff;
+  --pause: #FBBF24;
+  --err: #ff6b6b;
+  --line-gap: 0.7em;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: "Atkinson Hyperlegible", "Inter", -apple-system, "Segoe UI", system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  /* Scroll nativo do body — funciona melhor em iOS/Android que scroll de container interno */
+  scroll-behavior: smooth;
+  touch-action: pan-y;     /* permite scroll vertical, bloqueia zoom acidental */
+  margin: 0;
+}
+html { scrollbar-width: none; }
+html::-webkit-scrollbar { display: none; }
+
+/* ====== Zona CART (stream do body) ====== */
+#cart-zone {
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 30vh 6vw 24vh 6vw;  /* topo grande = espaço pra rolar pra cima naturalmente */
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  touch-action: pan-y;
+}
+
+#lines {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--line-gap);
+  width: 100%;
+}
+
+/* Cada linha = uma frase final do tradutor. CONGELADA depois de aparecer. */
+.line {
+  font-weight: 600;
+  font-size: clamp(28px, 5.2vw, 64px);
+  line-height: 1.42;
+  text-wrap: balance;
+  max-width: 22em;            /* ~66 chars — sweet spot leitura (WCAG 1.4.8) */
+  margin: 0 auto;
+  text-align: center;
+  letter-spacing: 0.005em;
+  color: var(--fg);
+  contain: layout style;       /* isola repaint — não afeta vizinhos */
+  opacity: 0;
+  transform: translateY(20px);
+  animation: lineIn 0.5s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+  word-wrap: break-word;
+  hyphens: auto;
+}
+@keyframes lineIn {
+  to { opacity: 1; transform: translateY(0); }
+}
+/* Hierarquia visual: linha de baixo = atual. Mais antigas vão sumindo */
+.line[data-age="1"] { opacity: 0.72; font-size: clamp(22px, 4vw, 50px); }
+.line[data-age="2"] { opacity: 0.48; font-size: clamp(18px, 3.4vw, 38px); }
+.line[data-age="3"] { opacity: 0.28; font-size: clamp(16px, 3vw, 32px); }
+.line[data-age="4plus"] { opacity: 0.15; font-size: clamp(15px, 2.6vw, 28px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .line { animation: none; opacity: 1; transform: none; }
+  html { scroll-behavior: auto; }
+}
+
+#anchor { height: 1px; flex-shrink: 0; }
+
+/* ====== Indicador "vazio" ====== */
+#empty {
+  position: fixed; inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--dim);
+  font-style: italic;
+  font-size: clamp(20px, 3vw, 36px);
+  opacity: 0.5;
+  pointer-events: none;
+}
+#empty.hidden { display: none; }
+
+/* ====== Modo Música (letra traduzida) ====== */
+#song-view {
+  position: fixed; inset: 0;
+  z-index: 150;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  background: radial-gradient(ellipse at top, #161226 0%, #0b0b0c 60%);
+  padding: 14vh 7vw 16vh 7vw;
+  scroll-behavior: smooth;
+}
+#song-view.hidden { display: none; }
+#song-head {
+  text-align: center;
+  margin-bottom: 6vh;
+  position: sticky; top: 0;
+}
+.song-badge {
+  display: inline-block;
+  font-family: "Inter", sans-serif;
+  font-size: clamp(12px, 2.6vw, 16px);
+  font-weight: 700;
+  color: #FBBF24;
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251,191,36,0.3);
+  padding: 4px 14px;
+  border-radius: 999px;
+  letter-spacing: 0.04em;
+}
+#song-title {
+  display: block;
+  margin-top: 10px;
+  font-family: "Atkinson Hyperlegible", sans-serif;
+  font-size: clamp(16px, 3.4vw, 22px);
+  font-weight: 700;
+  color: var(--dim);
+}
+#song-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 3.2vh;
+  max-width: 22em;
+  margin: 0 auto;
+  text-align: center;
+}
+.song-line .es {
+  font-family: "Atkinson Hyperlegible", sans-serif;
+  font-weight: 700;
+  font-size: clamp(28px, 6vw, 60px);
+  line-height: 1.3;
+  color: var(--fg);
+  text-wrap: balance;
+}
+.song-line .pt {
+  display: block;
+  margin-top: 0.4em;
+  font-family: "Inter", sans-serif;
+  font-weight: 400;
+  font-size: clamp(14px, 2.6vw, 20px);
+  color: var(--dim);
+  opacity: 0.65;
+}
+#song-foot {
+  text-align: center;
+  margin-top: 8vh;
+  color: var(--dim);
+  font-family: "Inter", sans-serif;
+  font-size: clamp(12px, 2.4vw, 15px);
+  opacity: 0.5;
+}
+
+
+/* ====== Botão de modo (canto superior direito) ====== */
+#pace-toggle {
+  position: fixed;
+  top: max(18px, env(safe-area-inset-top));
+  right: 18px;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 999px;
+  padding: 10px 18px;
+  color: var(--fg);
+  font-family: "Inter", sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  z-index: 100;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.25s;
+  letter-spacing: 0.01em;
+}
+#pace-toggle:active { transform: scale(0.96); }
+#pace-toggle.my-pace {
+  background: rgba(251, 191, 36, 0.22);
+  border-color: var(--pause);
+  color: var(--pause);
+}
+
+/* ====== Botão "Siguiente" (modo Meu ritmo) ====== */
+#next-btn {
+  position: fixed;
+  bottom: max(8vh, env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 16px 36px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-family: "Atkinson Hyperlegible", "Inter", sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  z-index: 50;
+  box-shadow: 0 6px 24px rgba(91, 157, 255, 0.45);
+  transition: transform 0.15s, background 0.2s;
+  min-width: 60vw;
+  max-width: 360px;
+  text-align: center;
+  letter-spacing: 0.01em;
+}
+#next-btn:active { transform: translateX(-50%) scale(0.97); }
+#next-btn:disabled {
+  background: rgba(255,255,255,0.08);
+  color: var(--dim);
+  cursor: default;
+  box-shadow: none;
+  pointer-events: none;
+}
+.queue-count {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 2px 10px;
+  background: rgba(255,255,255,0.22);
+  border-radius: 999px;
+  font-size: 0.85em;
+  font-weight: 700;
+}
+#next-btn:disabled .queue-count { background: rgba(255,255,255,0.04); }
+
+/* ====== Chip "↓ N nuevas" (sticky-bottom inteligente, modo live) ====== */
+#catchup {
+  position: fixed;
+  bottom: max(14vh, calc(env(safe-area-inset-bottom) + 80px));
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 22px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-family: "Inter", sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  z-index: 40;
+  box-shadow: 0 4px 18px rgba(91, 157, 255, 0.5);
+  animation: chipIn 0.35s ease-out;
+}
+@keyframes chipIn { from { opacity: 0; transform: translate(-50%, 20px); } }
+
+/* ====== Status dot (canto inferior direito) ====== */
+#status {
+  position: fixed;
+  bottom: max(14px, env(safe-area-inset-bottom));
+  right: 18px;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--dim);
+  opacity: 0.4;
+  z-index: 10;
+  transition: background 0.2s, opacity 0.2s, box-shadow 0.2s;
+}
+#status.connected { background: var(--accent); opacity: 0.8; box-shadow: 0 0 8px rgba(91, 157, 255, 0.5); }
+#status.error { background: var(--err); opacity: 0.9; }
+
+/* ====== Nome da igreja no topo (sempre visível) ====== */
+#church-header {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  padding: max(14px, env(safe-area-inset-top)) 80px 16px 80px;
+  background: linear-gradient(to bottom,
+    rgba(11, 11, 12, 0.92) 0%,
+    rgba(11, 11, 12, 0.75) 60%,
+    rgba(11, 11, 12, 0) 100%);
+  text-align: center;
+  z-index: 90;
+  pointer-events: none;
+  letter-spacing: 0.01em;
+}
+.church-name {
+  display: inline-block;
+  font-family: "Atkinson Hyperlegible", "Inter", sans-serif;
+  font-size: clamp(14px, 3vw, 19px);
+  font-weight: 700;
+  color: var(--fg);
+  letter-spacing: 0.02em;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.6);
+  background: linear-gradient(135deg, #fafafa 0%, #d8d8d8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  padding: 0 8px;
+  line-height: 1.2;
+}
+.church-icon {
+  display: inline-block;
+  margin-right: 8px;
+  -webkit-text-fill-color: initial;
+  color: var(--fg);
+  vertical-align: -1px;
+}
+
+/* Contador de pessoas conectadas, abaixo do nome da igreja */
+.audience-count {
+  display: block;
+  font-family: "Inter", sans-serif;
+  font-size: clamp(11px, 2.4vw, 14px);
+  font-weight: 500;
+  color: var(--dim);
+  margin-top: 3px;
+  letter-spacing: 0.02em;
+  opacity: 0.85;
+  transition: opacity 0.3s, color 0.3s;
+}
+.audience-count.has-people {
+  color: var(--accent);
+  opacity: 1;
+}
+.audience-count .pulse-dot {
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #5fcf80;
+  margin-right: 5px;
+  vertical-align: 1px;
+  animation: audPulse 2s ease-in-out infinite;
+}
+@keyframes audPulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(95, 207, 128, 0.5); }
+  50% { opacity: 0.6; box-shadow: 0 0 0 6px rgba(95, 207, 128, 0); }
+}
+
+/* ====== Botão de ajuda (?) — reabre instruções ====== */
+#help-btn {
+  position: fixed;
+  top: max(18px, env(safe-area-inset-top));
+  left: 18px;
+  width: 36px; height: 36px;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 50%;
+  color: var(--fg);
+  font-family: "Inter", sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  z-index: 100;
+  user-select: none;
+  opacity: 0.55;
+  transition: opacity 0.2s, transform 0.15s;
+}
+#help-btn:hover, #help-btn:active { opacity: 1; transform: scale(1.08); }
+
+/* ====== Welcome overlay (instruções em ES) ====== */
+#welcome {
+  position: fixed; inset: 0;
+  background: rgba(8, 8, 10, 0.96);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: env(safe-area-inset-top) 6vw env(safe-area-inset-bottom);
+  overflow-y: auto;
+  animation: welcomeIn 0.45s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+#welcome.hidden { display: none; }
+@keyframes welcomeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.welcome-content {
+  max-width: 480px;
+  width: 100%;
+  padding: 24px 4px;
+  text-align: center;
+}
+
+.welcome-content h1 {
+  font-family: "Atkinson Hyperlegible", sans-serif;
+  font-size: clamp(28px, 7vw, 38px);
+  font-weight: 700;
+  margin-bottom: 6px;
+  letter-spacing: 0.005em;
+}
+.welcome-church {
+  font-family: "Atkinson Hyperlegible", sans-serif;
+  font-size: clamp(16px, 3.6vw, 20px);
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: 18px;
+  letter-spacing: 0.01em;
+}
+.welcome-content .subtitle {
+  font-family: "Inter", sans-serif;
+  font-size: clamp(15px, 3.8vw, 18px);
+  color: var(--dim);
+  margin-bottom: 28px;
+  line-height: 1.5;
+  font-weight: 400;
+}
+.welcome-content .subtitle strong { color: var(--fg); font-weight: 600; }
+
+.instructions {
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 32px;
+}
+.ins-block {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 16px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.ins-icon {
+  flex-shrink: 0;
+  width: 42px; height: 42px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px;
+  background: rgba(91, 157, 255, 0.12);
+  border-radius: 12px;
+}
+.ins-block.accent-yellow .ins-icon { background: rgba(251, 191, 36, 0.15); }
+.ins-text {
+  flex: 1;
+  font-family: "Inter", sans-serif;
+  font-size: clamp(14px, 3.6vw, 16px);
+  line-height: 1.5;
+  color: var(--fg);
+}
+.ins-text strong {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: 700;
+  font-size: 1.05em;
+}
+.ins-text .ins-detail {
+  color: var(--dim);
+  font-weight: 400;
+}
+
+#welcome-close {
+  display: block;
+  width: 100%;
+  padding: 18px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 14px;
+  font-family: "Atkinson Hyperlegible", sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(91, 157, 255, 0.35);
+  transition: transform 0.15s;
+  margin-bottom: 14px;
+  letter-spacing: 0.01em;
+}
+#welcome-close:active { transform: scale(0.98); }
+
+.dont-show {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--dim);
+  font-family: "Inter", sans-serif;
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+}
+.dont-show input { width: 16px; height: 16px; accent-color: var(--accent); }
+
+@media (prefers-reduced-motion: reduce) {
+  #welcome { animation: none; }
+}
+
+/* ====== Hint discreto no centro inferior quando fila vazia em myPace ====== */
+#wait-hint {
+  position: fixed;
+  bottom: max(8vh, env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--dim);
+  font-family: "Inter", sans-serif;
+  font-size: 14px;
+  opacity: 0.55;
+  z-index: 30;
+  user-select: none;
+  pointer-events: none;
+  font-style: italic;
+}
+#wait-hint.hidden { display: none; }
+</style>
+</head>
+<body>
+
+<!-- Welcome overlay (aparece automaticamente na 1ª vez) -->
+<div id="welcome">
+  <div class="welcome-content">
+    <h1>👋 Bienvenido</h1>
+    <p class="welcome-church">⛪ Iglesia Bautista Gracia y Paz</p>
+    <p class="subtitle">
+      Estás viendo la <strong>traducción al español en tiempo real</strong> del sermón.<br>
+      El pastor habla en portugués y aquí aparece traducido para ti.
+    </p>
+
+    <div class="instructions">
+      <div class="ins-block accent-yellow">
+        <div class="ins-icon">🐢</div>
+        <div class="ins-text">
+          <strong>Estás en el modo "A mi ritmo" ✓</strong>
+          <span class="ins-detail">Las frases traducidas se van guardando y <strong>tú avanzas cada una con un toque</strong> en el botón <strong style="color:var(--pause)">▶ Siguiente</strong>. Lee con calma — nada se pierde, esperan por ti.</span>
+        </div>
+      </div>
+
+      <div class="ins-block">
+        <div class="ins-icon">⚡</div>
+        <div class="ins-text">
+          <strong>¿Prefieres que corra solo?</strong>
+          <span class="ins-detail">Toca el botón <strong>⚡ En vivo</strong> arriba a la derecha y la traducción seguirá al pastor automáticamente, sin tener que tocar.</span>
+        </div>
+      </div>
+
+      <div class="ins-block">
+        <div class="ins-icon">👆</div>
+        <div class="ins-text">
+          <strong>Releer una frase anterior</strong>
+          <span class="ins-detail">Desliza hacia arriba para releer lo que ya pasó. Puedes volver cuando quieras.</span>
+        </div>
+      </div>
+
+      <div class="ins-block">
+        <div class="ins-icon">📺</div>
+        <div class="ins-text">
+          <strong>Pantalla completa</strong>
+          <span class="ins-detail">Toca dos veces en cualquier parte del texto para entrar o salir de pantalla completa.</span>
+        </div>
+      </div>
+    </div>
+
+    <button id="welcome-close" type="button">Empezar a leer</button>
+    <label class="dont-show">
+      <input type="checkbox" id="dont-show">
+      No mostrar de nuevo en este dispositivo
+    </label>
+  </div>
+</div>
+
+<header id="church-header">
+  <span class="church-name"><span class="church-icon">⛪</span>Igreja Batista Graça e Paz</span>
+  <span class="audience-count" id="audience-count" aria-live="polite">
+    <span class="pulse-dot"></span><span id="aud-text">conectando…</span>
+  </span>
+</header>
+
+<button id="help-btn" type="button" aria-label="Ver instrucciones" title="Ver instrucciones">?</button>
+
+<div id="empty">Esperando…</div>
+
+<main id="cart-zone" aria-live="polite" aria-atomic="false">
+  <ol id="lines" role="log"></ol>
+  <div id="anchor"></div>
+</main>
+
+<button id="pace-toggle" type="button" aria-label="Cambiar modo de lectura">⚡ En vivo</button>
+<button id="next-btn" type="button" hidden>▶ Siguiente <span class="queue-count" id="queue-count">0</span></button>
+<div id="wait-hint" class="hidden">Esperando la próxima frase…</div>
+<button id="catchup" type="button" hidden>↓ <span id="newcount">0</span> nuevas</button>
+<div id="status"></div>
+
+<!-- Modo Música: letra traduzida (cobre a tradução normal) -->
+<div id="song-view" class="hidden">
+  <div id="song-head">
+    <span class="song-badge">🎵 Música</span>
+    <span id="song-title"></span>
+  </div>
+  <div id="song-lines"></div>
+  <div id="song-foot">▲ Desliza para leer en tu ritmo ▼</div>
+</div>
+
+<script>
+(function() {
+  "use strict";
+
+  // ========================================
+  // Welcome overlay — instruções em ES na 1ª abertura
+  // ========================================
+  const welcome = document.getElementById("welcome");
+  const welcomeClose = document.getElementById("welcome-close");
+  const dontShowCheckbox = document.getElementById("dont-show");
+  const helpBtn = document.getElementById("help-btn");
+  const WELCOME_KEY = "display.welcomeShown";
+
+  function shouldShowWelcome() {
+    try { return localStorage.getItem(WELCOME_KEY) !== "1"; }
+    catch (_) { return true; }
+  }
+  function hideWelcome(persistChoice) {
+    welcome.classList.add("hidden");
+    if (persistChoice && dontShowCheckbox.checked) {
+      try { localStorage.setItem(WELCOME_KEY, "1"); } catch (_) {}
+    }
+  }
+  function showWelcome() {
+    // Quando reabre via botão "?", desmarca checkbox (re-mostrar implícito)
+    dontShowCheckbox.checked = false;
+    welcome.classList.remove("hidden");
+  }
+  // Decisão na boot: mostra ou esconde
+  if (shouldShowWelcome()) {
+    welcome.classList.remove("hidden");
+  } else {
+    welcome.classList.add("hidden");
+  }
+  welcomeClose.addEventListener("click", () => hideWelcome(true));
+  helpBtn.addEventListener("click", showWelcome);
+
+  // ========================================
+  // Refs DOM
+  // ========================================
+  const cartZone    = document.getElementById("cart-zone");
+  const linesEl     = document.getElementById("lines");
+  const anchor      = document.getElementById("anchor");
+  const emptyEl     = document.getElementById("empty");
+  const paceToggle  = document.getElementById("pace-toggle");
+  const nextBtn     = document.getElementById("next-btn");
+  const queueCount  = document.getElementById("queue-count");
+  const catchup     = document.getElementById("catchup");
+  const newcountEl  = document.getElementById("newcount");
+  const statusEl    = document.getElementById("status");
+  const waitHint    = document.getElementById("wait-hint");
+  const songView    = document.getElementById("song-view");
+  const songTitle   = document.getElementById("song-title");
+  const songLines   = document.getElementById("song-lines");
+
+  // Modo Música: mostra a letra traduzida cobrindo a tradução normal
+  function showSong(data) {
+    const lines = Array.isArray(data.lines) ? data.lines : [];
+    songTitle.textContent = data.title || "";
+    songLines.innerHTML = "";
+    for (const ln of lines) {
+      const div = document.createElement("div");
+      div.className = "song-line";
+      const es = document.createElement("span");
+      es.className = "es";
+      es.textContent = ln.es || "";
+      div.appendChild(es);
+      if (ln.pt) {
+        const pt = document.createElement("span");
+        pt.className = "pt";
+        pt.textContent = ln.pt;
+        div.appendChild(pt);
+      }
+      songLines.appendChild(div);
+    }
+    songView.classList.remove("hidden");
+    songView.scrollTo({ top: 0, behavior: "auto" });
+  }
+  function hideSong() {
+    songView.classList.add("hidden");
+  }
+
+  // ========================================
+  // Config
+  // ========================================
+  const MAX_LINES_IN_DOM = 30;   // poda só pelo TOPO (linhas mais antigas saem)
+  // Chave v2: reseta todo mundo pro novo padrão (antes salvava "live" no init).
+  const STORAGE_MODE     = "display.readerMode.v2";
+
+  // ========================================
+  // Estado
+  // ========================================
+  // mode: "live" = auto-scroll do stream; "myPace" = usuário avança manualmente
+  // PADRÃO = "myPace" (A mi ritmo) — cada pessoa lê no próprio tempo.
+  let mode = "myPace";
+  try {
+    const saved = localStorage.getItem(STORAGE_MODE);
+    if (saved === "live" || saved === "myPace") mode = saved;  // respeita escolha explícita
+  } catch (_) {}
+
+  // Fila de frases finais aguardando exibição (em modo myPace)
+  const pendingQueue = [];
+
+  // Dedupe — Whisper às vezes manda o mesmo seq duas vezes
+  const seenSeqs = new Set();
+
+  // Sticky-bottom (modo live): true se âncora visível.
+  let stickyBottom = true;
+  // Contador de novas frases enquanto usuário rolou pra cima (modo live)
+  let newWhileScrolledUp = 0;
+
+  // ========================================
+  // Helpers
+  // ========================================
+  function showEmpty(show) { emptyEl.classList.toggle("hidden", !show); }
+
+  /** Atualiza data-age das linhas (mais nova embaixo = sem age, sobe → 1, 2, 3, 4+) */
+  function updateAges() {
+    const all = linesEl.children;
+    const total = all.length;
+    for (let i = 0; i < total; i++) {
+      const ageFromBottom = total - 1 - i;
+      const el = all[i];
+      if (ageFromBottom === 0)      el.removeAttribute("data-age");
+      else if (ageFromBottom === 1) el.dataset.age = "1";
+      else if (ageFromBottom === 2) el.dataset.age = "2";
+      else if (ageFromBottom === 3) el.dataset.age = "3";
+      else                          el.dataset.age = "4plus";
+    }
+  }
+
+  /** Poda só do TOPO. Linhas que a audiência leu nunca mudam de posição embaixo. */
+  function pruneTop() {
+    while (linesEl.children.length > MAX_LINES_IN_DOM) {
+      linesEl.firstElementChild.remove();
+    }
+  }
+
+  /** Append-only: cria <li> nova, conteúdo IMUTÁVEL (write-once) */
+  function appendLine(text) {
+    if (!text || !text.trim()) return;
+    showEmpty(false);
+    const li = document.createElement("li");
+    li.className = "line";
+    li.textContent = text;
+    li.dataset.frozen = "true";  // marcador: NUNCA editar essa <li>
+    linesEl.appendChild(li);
+    updateAges();
+    pruneTop();
+    // Auto-scroll só se usuário está "na ponta" (em modo live)
+    if (mode === "live" && stickyBottom) {
+      requestAnimationFrame(() => {
+        // Scroll do body inteiro pro fim (mais robusto em mobile que container interno)
+        window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" });
+      });
+    } else if (mode === "live" && !stickyBottom) {
+      // Usuário rolou pra cima — incrementa chip "↓ N nuevas"
+      newWhileScrolledUp++;
+      newcountEl.textContent = String(newWhileScrolledUp);
+      catchup.hidden = false;
+    }
+  }
+
+  /** Processa final do servidor — vai pra fila ou pro DOM dependendo do modo */
+  function handleFinal(data) {
+    const seq = data.seq;
+    if (seq != null && seenSeqs.has(seq)) return;
+    if (seq != null) seenSeqs.add(seq);
+    const text = (data.tgt_text || "").trim();
+    if (!text) return;
+
+    if (mode === "myPace") {
+      pendingQueue.push(text);
+      updateMyPaceUI();
+    } else {
+      appendLine(text);
+    }
+  }
+
+  /** Atualiza UI do modo "A mi ritmo": botão Siguiente + hint */
+  function updateMyPaceUI() {
+    if (mode !== "myPace") {
+      nextBtn.hidden = true;
+      waitHint.classList.add("hidden");
+      return;
+    }
+    const n = pendingQueue.length;
+    if (n === 0) {
+      nextBtn.hidden = true;
+      waitHint.classList.remove("hidden");
+    } else {
+      waitHint.classList.add("hidden");
+      nextBtn.hidden = false;
+      nextBtn.disabled = false;
+      queueCount.textContent = String(n);
+    }
+  }
+
+  // ========================================
+  // Botão Siguiente — avança UMA frase por toque
+  // ========================================
+  nextBtn.addEventListener("click", () => {
+    if (mode !== "myPace" || pendingQueue.length === 0) return;
+    const text = pendingQueue.shift();
+    appendLine(text);
+    // Em myPace, força scroll pro fim (a frase nova é a que o usuário pediu)
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" });
+    });
+    updateMyPaceUI();
+  });
+
+  // ========================================
+  // Toggle de modo (live ↔ myPace)
+  // ========================================
+  function setMode(newMode, persist) {
+    mode = newMode;
+    // Só persiste quando a pessoa CLICA (persist=true). No init não salva,
+    // assim quem nunca escolheu sempre cai no padrão (myPace).
+    if (persist) {
+      try { localStorage.setItem(STORAGE_MODE, newMode); } catch (_) {}
+    }
+    if (mode === "myPace") {
+      paceToggle.classList.add("my-pace");
+      paceToggle.textContent = "🐢 A mi ritmo";
+      paceToggle.setAttribute("aria-pressed", "true");
+      stickyBottom = false;
+      catchup.hidden = true;
+      newWhileScrolledUp = 0;
+      updateMyPaceUI();
+    } else {
+      paceToggle.classList.remove("my-pace");
+      paceToggle.textContent = "⚡ En vivo";
+      paceToggle.setAttribute("aria-pressed", "false");
+      nextBtn.hidden = true;
+      waitHint.classList.add("hidden");
+      stickyBottom = true;
+      catchup.hidden = true;
+      newWhileScrolledUp = 0;
+      // Esvazia fila de pendentes — mostra TODAS de uma vez (sincroniza com o vivo)
+      while (pendingQueue.length) appendLine(pendingQueue.shift());
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "auto" });
+      });
+    }
+  }
+  paceToggle.addEventListener("click", () => {
+    setMode(mode === "live" ? "myPace" : "live", true);  // clique = salva escolha
+  });
+  setMode(mode);  // aplica modo inicial (sem persistir o padrão)
+
+  // ========================================
+  // Sticky-bottom inteligente (modo live)
+  // Observa a âncora na VIEWPORT (root: null) com margem de 100px embaixo,
+  // assim sticky permanece true mesmo se usuário tá quase no fim mas não 100%.
+  // ========================================
+  const io = new IntersectionObserver(([entry]) => {
+    if (mode !== "live") return;
+    stickyBottom = entry.isIntersecting;
+    if (stickyBottom) {
+      catchup.hidden = true;
+      newWhileScrolledUp = 0;
+    }
+  }, { root: null, rootMargin: "0px 0px 100px 0px", threshold: 0 });
+  io.observe(anchor);
+
+  catchup.addEventListener("click", () => {
+    stickyBottom = true;
+    newWhileScrolledUp = 0;
+    catchup.hidden = true;
+    window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" });
+  });
+
+  // ========================================
+  // WebSocket
+  // ========================================
+  let reconnectDelay = 500;
+  function connect() {
+    const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
+    let ws;
+    try {
+      ws = new WebSocket(`${wsProto}//${location.host}/ws/display`);
+    } catch (e) {
+      statusEl.className = "error";
+      setTimeout(connect, reconnectDelay);
+      reconnectDelay = Math.min(reconnectDelay * 2, 5000);
+      return;
+    }
+    ws.onopen = () => {
+      statusEl.className = "connected";
+      reconnectDelay = 500;
+    };
+    ws.onmessage = (ev) => {
+      try {
+        const data = JSON.parse(ev.data);
+        // Display v2 ignora PARTIALS (anti-padrão: viola write-once).
+        // Sempre processa apenas FINAL.
+        if (data.type === "final" || data.type === "result") {
+          handleFinal(data);
+        } else if (data.type === "clear") {
+          linesEl.innerHTML = "";
+          pendingQueue.length = 0;
+          seenSeqs.clear();
+          newWhileScrolledUp = 0;
+          catchup.hidden = true;
+          updateMyPaceUI();
+          showEmpty(true);
+        } else if (data.type === "song") {
+          showSong(data);
+        } else if (data.type === "song-hide") {
+          hideSong();
+        }
+      } catch (e) {
+        console.warn("display-v2 parse fail", e);
+      }
+    };
+    ws.onerror = () => { statusEl.className = "error"; };
+    ws.onclose = () => {
+      statusEl.className = "error";
+      setTimeout(connect, reconnectDelay);
+      reconnectDelay = Math.min(reconnectDelay * 2, 5000);
+    };
+  }
+  connect();
+
+  // ========================================
+  // Contador de audiência (pro público ver quantos estão acompanhando)
+  // Faz polling a cada 5s no /api/audience
+  // ========================================
+  const audCountEl = document.getElementById("audience-count");
+  const audTextEl = document.getElementById("aud-text");
+
+  function formatAudience(n) {
+    if (n <= 0) return "Esperando que se conecten…";
+    if (n === 1) return "1 persona conectada ahora";
+    return `${n} personas conectadas ahora`;
+  }
+
+  async function pollAudience() {
+    try {
+      const r = await fetch("/api/audience", { cache: "no-store" });
+      if (!r.ok) return;
+      const data = await r.json();
+      const count = data.unique_devices_connected || 0;
+      if (audTextEl) audTextEl.textContent = formatAudience(count);
+      if (audCountEl) audCountEl.classList.toggle("has-people", count > 0);
+    } catch (e) {
+      // Silencioso — não polui se servidor cair
+    }
+  }
+  pollAudience();
+  setInterval(pollAudience, 5000);
+
+  // Toggle de fullscreen ao tocar 2x na zona de texto (não na UI).
+  // IMPORTANTE: usa pointerdown em vez de touchend pra NÃO interferir com scroll.
+  let lastTap = 0;
+  document.addEventListener("pointerdown", (e) => {
+    if (e.target.closest("button, label, a, input")) return;
+    if (e.target.closest("#welcome")) return;
+    const now = Date.now();
+    if (now - lastTap < 350) {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen?.().catch(()=>{});
+      } else {
+        document.exitFullscreen?.().catch(()=>{});
+      }
+    }
+    lastTap = now;
+  });
+})();
+</script>
+</body>
+</html>
