@@ -36,7 +36,16 @@ RUN python -c "from faster_whisper import WhisperModel; WhisperModel('small', de
 
 # 2) Baixa + converte o modelo de tradução NLLB-200 -> data/marian/bible-ct2/
 #    (backend 'marian'). É o passo mais pesado do build (~600MB download).
-RUN python scripts/setup_marian.py --quantization int8 && echo "NLLB OK"
+#
+#    O conversor do ctranslate2 precisa do PyTorch SÓ pra carregar o modelo
+#    HuggingFace antes de converter. Depois de convertido pra CT2, o runtime
+#    (ctranslate2 / faster-whisper) NÃO usa torch. Então instalamos o torch CPU
+#    (índice oficial CPU, evita baixar o wheel gigante de CUDA), convertemos e
+#    removemos o torch na MESMA camada pra imagem não inchar.
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu && \
+    python scripts/setup_marian.py --quantization int8 && \
+    pip uninstall -y torch && \
+    echo "NLLB OK"
 
 EXPOSE 3080
 
