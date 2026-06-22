@@ -653,6 +653,26 @@
     0%, 100% { opacity: 1; }
     50% { opacity: 0.2; }
   }
+  /* ===== Chavinha FONTE DE HOJE (Igreja app x YouTube daqui) ===== */
+  #scene-switch {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    margin: 8px 0 12px; padding: 10px 14px;
+    background: rgba(91,157,255,0.07);
+    border: 1px solid rgba(91,157,255,0.25);
+    border-radius: 12px;
+  }
+  #scene-switch .scene-title { font-weight: 700; font-size: 13px; letter-spacing: 0.03em; color: var(--text, #eee); }
+  #scene-seg { display: inline-flex; background: rgba(0,0,0,0.28); border-radius: 10px; padding: 3px; gap: 3px; }
+  .scene-btn {
+    border: none; border-radius: 8px; padding: 10px 18px;
+    font-size: 14px; font-weight: 700; cursor: pointer;
+    background: transparent; color: var(--text-muted, #9aa0a6);
+    transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+  }
+  .scene-btn:not(.active):hover { color: var(--text, #eee); background: rgba(255,255,255,0.06); }
+  .scene-btn.active.church  { background: #5fcf80; color: #07140a; box-shadow: 0 2px 10px rgba(95,207,128,0.45); }
+  .scene-btn.active.youtube { background: #5b9dff; color: #fff;    box-shadow: 0 2px 10px rgba(91,157,255,0.45); }
+  #scene-status { font-size: 12.5px; color: var(--text-muted, #9aa0a6); font-style: italic; }
 </style>
 </head>
 <body>
@@ -665,6 +685,16 @@
       &#9650;
     </button>
   </h1>
+  <div id="scene-switch">
+    <span class="scene-title">🔀 FONTE DE HOJE:</span>
+    <div id="scene-seg">
+      <button id="scene-church" type="button" class="scene-btn"
+              title="A igreja manda o áudio pelo app (TradutorIgreja.exe). O operador para a captura local e só recebe o som da igreja.">🏛️ Igreja (app)</button>
+      <button id="scene-youtube" type="button" class="scene-btn"
+              title="Captura o áudio do SEU PC (YouTube/live), igual semana passada.">💻 YouTube daqui</button>
+    </div>
+    <span id="scene-status"></span>
+  </div>
   <div class="controls" id="controls-bar">
     <select id="direction" title="Direção de tradução">
       <option value="pt-es" selected>PT &rarr; ES</option>
@@ -707,6 +737,7 @@
     <button id="open-browser" title="Abre este painel no navegador padrão (com URL bar, abas — útil pra testar performance)">&#127760; Navegador</button>
     <button id="open-display" title="Abre a tela pública em outra janela (mande pro projetor)">&#128250; Tela pública</button>
     <button id="music-btn" title="Buscar música no YouTube e mostrar a letra traduzida em espanhol pra audiência" style="background: rgba(251,191,36,0.12); border-color: rgba(251,191,36,0.35);">&#127925; Música</button>
+    <button id="bulletin-btn" title="Boletim do culto: digite a ordem do culto e envie pra audiência ver (traduzida pro espanhol)" style="background: rgba(91,157,255,0.12); border-color: rgba(91,157,255,0.35);">&#128203; Boletim</button>
     <button id="clear-display" title="Limpa a tela pública (entre seções, etc.)">Limpar tela pública</button>
     <button id="clear">Limpar log</button>
     <button id="mic-test-btn" title="Testa cada microfone e dá uma nota. Útil pra decidir qual usar antes da pregação.">&#127908; Testar mic</button>
@@ -874,6 +905,41 @@
           </div>
           <div id="music-preview-lines" style="max-height:30vh; overflow-y:auto; font-size:13px; line-height:1.5;"></div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de boletim do culto (ordem do culto) -->
+  <div class="modal-backdrop" id="bulletin-backdrop" hidden>
+    <div class="modal" role="dialog" aria-labelledby="bulletin-title" style="max-width: 760px;">
+      <div class="modal-header">
+        <h2 id="bulletin-title">📋 Boletim do culto</h2>
+        <button id="bulletin-close" class="modal-close" aria-label="Fechar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="margin-bottom:10px; color:var(--text-muted,#888); line-height:1.5;">
+          Cole/digite a ordem do culto. Eu traduzo os <b>títulos e versículos</b> pro espanhol
+          (nomes de cânticos e pessoas ficam no original). A audiência abre no botão <b>📋 Programa</b>.
+        </p>
+        <details style="margin-bottom:10px; font-size:13px; color:var(--text-muted,#888);">
+          <summary style="cursor:pointer; user-select:none;">📖 Como escrever (formato) — clique pra ver</summary>
+          <pre style="white-space:pre-wrap; background:var(--panel,#1a1f2e); padding:10px; border-radius:8px; margin-top:8px; line-height:1.55;"># Boas-vindas/Oração                          → seção (cabeçalho)
+## Exposição Bíblica | Pr. Igor Soares        → título central | detalhe
+" Ele nos resgatou... (Colossenses 1:13,14)   → versículo (traduz + referência)
+- Cântico congregacional | Vida aos sepulcros (Gabriela Rocha)   → item | detalhe
+Aniversariantes                               → item só com o nome
+
+@title Igreja Batista Graça e Paz
+@date Domingo, 21 de junho de 2026</pre>
+        </details>
+        <textarea id="bulletin-raw" rows="14" placeholder="Cole a ordem do culto aqui..."
+                  style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border,#444); background:var(--panel,#1a1f2e); color:var(--text,#eee); font-size:13px; font-family:ui-monospace,monospace; line-height:1.55; resize:vertical; box-sizing:border-box;"></textarea>
+        <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; align-items:center;">
+          <button id="bulletin-reload">↺ Recarregar atual</button>
+          <button id="bulletin-save" class="primary" style="min-width:160px; margin-left:auto;">💾 Salvar e enviar</button>
+        </div>
+        <div id="bulletin-status" style="font-size:13px; color:var(--text-muted,#888); margin-top:10px; min-height:18px;"></div>
+        <div id="bulletin-items" style="margin-top:14px;"></div>
       </div>
     </div>
   </div>
@@ -2362,6 +2428,97 @@ loadAudioDevices().then(refreshMicHint);
 })();
 
 // ============================================================
+// 📋 BOLETIM DO CULTO — ordem do culto (traduzida pra audiência)
+// ============================================================
+(function() {
+  const btn      = document.getElementById("bulletin-btn");
+  const backdrop = document.getElementById("bulletin-backdrop");
+  const closeBtn = document.getElementById("bulletin-close");
+  const raw      = document.getElementById("bulletin-raw");
+  const reloadBtn = document.getElementById("bulletin-reload");
+  const saveBtn  = document.getElementById("bulletin-save");
+  const statusEl = document.getElementById("bulletin-status");
+  const itemsEl  = document.getElementById("bulletin-items");
+  let current = null;
+
+  function escapeHtml(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+
+  function open() { backdrop.hidden = false; if (!raw.value.trim()) loadCurrent(); }
+  function close() { backdrop.hidden = true; }
+  if (btn) btn.addEventListener("click", open);
+  if (closeBtn) closeBtn.addEventListener("click", close);
+  if (backdrop) backdrop.addEventListener("click", (e) => { if (e.target === backdrop) close(); });
+
+  async function loadCurrent() {
+    try {
+      const r = await fetch("/api/bulletin", { cache: "no-store" });
+      if (r.ok) { current = await r.json(); raw.value = current.raw || ""; renderItems(); }
+    } catch (_) {}
+  }
+  if (reloadBtn) reloadBtn.addEventListener("click", loadCurrent);
+
+  async function save() {
+    saveBtn.disabled = true;
+    statusEl.textContent = "Traduzindo e enviando… (alguns segundos)";
+    try {
+      const r = await fetch("/api/bulletin", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ raw: raw.value }),
+      });
+      const data = await r.json();
+      if (data.ok) {
+        current = data.data;
+        statusEl.textContent = `✓ Enviado: ${data.items} itens. A audiência já vê no 📋 Programa.`;
+        renderItems();
+        showToast?.("bulletin-save", "📋 Boletim enviado pra audiência", 3000);
+      } else {
+        statusEl.textContent = "Erro ao salvar o boletim.";
+      }
+    } catch (e) { statusEl.textContent = "Erro: " + e.message; }
+    saveBtn.disabled = false;
+  }
+  if (saveBtn) saveBtn.addEventListener("click", save);
+
+  async function setCurrent(idx) {
+    try {
+      await fetch("/api/bulletin/current", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ index: idx }),
+      });
+      if (current) current.current_index = idx;
+      renderItems();
+    } catch (_) {}
+  }
+
+  function renderItems() {
+    if (!current || !Array.isArray(current.items) || !current.items.length) {
+      itemsEl.innerHTML = "";
+      return;
+    }
+    const cur = (typeof current.current_index === "number") ? current.current_index : -1;
+    let html = '<div style="font-size:12px; color:var(--text-muted,#888); margin-bottom:6px;">'
+      + 'Toque onde o culto está <b>agora</b> (a audiência vê “ahora”):</div>';
+    html += '<div style="display:flex; flex-direction:column; gap:4px; max-height:34vh; overflow-y:auto;">';
+    current.items.forEach((it, i) => {
+      const label = (it.label_es || it.label_pt || it.verse_es || it.verse_pt || "").slice(0, 64);
+      const isCur = (cur === i);
+      const tag = it.kind === "section" ? "§" : it.kind === "verse" ? "❝" : it.kind === "title" ? "◆" : "•";
+      html += `<button data-idx="${i}" class="bulletin-item-btn" style="text-align:left; padding:7px 10px; border-radius:7px; font-size:13px;`
+        + (isCur ? "background:rgba(91,157,255,0.22); border-color:#5b9dff; color:#fff;" : "")
+        + `">${isCur ? "▶ " : ""}<span style="opacity:0.5; margin-right:6px;">${tag}</span>${escapeHtml(label)}</button>`;
+    });
+    html += '</div>';
+    html += '<div style="margin-top:8px;"><button id="bulletin-clear-current">✖ Tirar o destaque</button></div>';
+    itemsEl.innerHTML = html;
+    itemsEl.querySelectorAll(".bulletin-item-btn").forEach((b) => {
+      b.addEventListener("click", () => setCurrent(parseInt(b.dataset.idx, 10)));
+    });
+    const clr = document.getElementById("bulletin-clear-current");
+    if (clr) clr.addEventListener("click", () => setCurrent(null));
+  }
+})();
+
+// ============================================================
 // 🎤 TESTE DE MICROFONE (com avaliação automática)
 // ============================================================
 const micTestState = {
@@ -2803,6 +2960,68 @@ els.audioSource.addEventListener("change", () => {
     });
   }
 });
+
+// ============================================================
+// 🔀 CHAVINHA "FONTE DE HOJE": Igreja (app) x YouTube daqui
+// Troca rápida entre os 2 cenários do culto:
+//   - Igreja  : para a captura local; o áudio chega pelo TradutorIgreja.exe
+//   - YouTube : captura o loopback do PC (igual semana passada)
+// ============================================================
+(function() {
+  const btnChurch  = document.getElementById("scene-church");
+  const btnYoutube = document.getElementById("scene-youtube");
+  const statusEl   = document.getElementById("scene-status");
+  if (!btnChurch || !btnYoutube) return;
+
+  function highlight(mode) {
+    btnChurch.classList.toggle("active", mode === "church");
+    btnChurch.classList.toggle("church", mode === "church");
+    btnYoutube.classList.toggle("active", mode === "youtube");
+    btnYoutube.classList.toggle("youtube", mode === "youtube");
+    try { localStorage.setItem("operator.scene", mode); } catch (_) {}
+  }
+
+  function hasLoopback() {
+    return Array.from(els.audioSource.options).some(o => o.value === "loopback");
+  }
+
+  btnChurch.addEventListener("click", async () => {
+    highlight("church");
+    if (state.recording) await stopRecording();
+    statusEl.innerHTML = "🏛️ <b>Recebendo o áudio do app da igreja.</b> As traduções aparecem na <b>Tela pública</b> e nos celulares.";
+  });
+
+  btnYoutube.addEventListener("click", async () => {
+    highlight("youtube");
+    if (!hasLoopback()) {
+      statusEl.textContent = "⚠ Não achei o dispositivo de áudio do PC (loopback). Veja o seletor de fonte ao lado.";
+      return;
+    }
+    els.audioSource.value = "loopback";
+    try { localStorage.setItem("operator.audioSource", "loopback"); } catch (_) {}
+    if (typeof refreshMicHint === "function") refreshMicHint();
+    if (state.recording) {
+      await stopRecording();
+      setTimeout(() => startRecording(), 250);
+    } else {
+      await startRecording();
+    }
+    statusEl.innerHTML = "💻 <b>Captando o áudio do seu PC</b> (YouTube/live). Toque algo em português pra testar.";
+  });
+
+  // Estado inicial: reflete a última escolha (sem disparar ação automática)
+  let saved = null;
+  try { saved = localStorage.getItem("operator.scene"); } catch (_) {}
+  if (saved === "church") {
+    highlight("church");
+    statusEl.innerHTML = "🏛️ <b>Modo Igreja</b> selecionado — o som vem pelo app da igreja.";
+  } else if (saved === "youtube") {
+    highlight("youtube");
+    statusEl.innerHTML = "💻 <b>Modo YouTube daqui</b> selecionado — clique de novo se quiser (re)iniciar a captura.";
+  } else {
+    statusEl.textContent = "Escolha de onde vem o áudio do culto hoje.";
+  }
+})();
 
 // Aviso inicial de contexto inseguro (mic vai falhar)
 if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {

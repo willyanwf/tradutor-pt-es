@@ -110,6 +110,7 @@ from translation_cache import SQLiteTranslationCache, IncrementalTranslator
 from marian_translator import MarianHub
 from system_capture import LocalAudioCapture, list_devices as list_audio_devices
 import youtube_lyrics
+import bulletin as bulletin_mod
 
 
 SCRIPT_DIR = Path(__file__).parent.resolve()
@@ -164,6 +165,36 @@ def save_persisted_display_config(cfg):
         )
     except Exception as exc:
         print(f"[state] falha ao salvar {STATE_FILE}: {exc}", file=sys.stderr)
+
+
+# ===== Boletim do culto (ordem do culto) — persistência em disco =====
+BULLETIN_FILE = Path(__file__).parent.parent / "data" / "bulletin.json"
+_EMPTY_BULLETIN = {
+    "title": "", "date_pt": "", "date_es": "",
+    "items": [], "raw": "", "current_index": None,
+}
+
+
+def load_bulletin():
+    try:
+        if BULLETIN_FILE.exists():
+            data = json.loads(BULLETIN_FILE.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                merged = dict(_EMPTY_BULLETIN)
+                merged.update(data)
+                return merged
+    except Exception as exc:
+        print(f"[bulletin] falha ao ler {BULLETIN_FILE}: {exc}", file=sys.stderr)
+    return dict(_EMPTY_BULLETIN)
+
+
+def save_bulletin(data):
+    try:
+        BULLETIN_FILE.parent.mkdir(parents=True, exist_ok=True)
+        BULLETIN_FILE.write_text(
+            json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    except Exception as exc:
+        print(f"[bulletin] falha ao salvar {BULLETIN_FILE}: {exc}", file=sys.stderr)
 
 
 class DisplayHub:
@@ -317,6 +348,8 @@ def make_app(model, default_translator, default_backend,
     hub = DisplayHub()
     # Cache de músicas já preparadas (video_id -> {title, source, lines:[{start,pt,es}]})
     prepared_songs = {}
+    # Boletim do culto (ordem do culto) atual — carregado do disco
+    current_bulletin = {"data": load_bulletin()}
 
     @app.get("/")
     async def root(request: Request):
@@ -366,6 +399,54 @@ def make_app(model, default_translator, default_backend,
     async def v2_alias():
         """Atalho pra /display-v2."""
         return await display_v2()
+
+    # ===== PWA (tela /v2 instalável no celular: "Añadir a inicio") =====
+    def _static_file(name, media_type, extra_headers=None):
+        f = STATIC_DIR / name
+        if not f.exists():
+            return JSONResponse({"error": f"{name} ausente em {STATIC_DIR}"}, status_code=404)
+        return FileResponse(f, media_type=media_type, headers=extra_headers)
+
+    @app.get("/manifest.webmanifest")
+    async def pwa_manifest():
+        return _static_file("manifest.webmanifest", "application/manifest+json")
+
+    @app.get("/sw.js")
+    async def pwa_sw():
+        # Servido na raiz => escopo "/" (controla /v2). no-cache p/ atualizar rápido.
+        return _static_file("sw.js", "application/javascript",
+                            {"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"})
+
+    @app.get("/icon-192.png")
+    async def pwa_icon_192():
+        return _static_file("icon-192.png", "image/png")
+
+    @app.get("/icon-512.png")
+    async def pwa_icon_512():
+        return _static_file("icon-512.png", "image/png")
+
+    @app.get("/icon-maskable-512.png")
+    async def pwa_icon_maskable():
+        return _static_file("icon-maskable-512.png", "image/png")
+
+    @app.get("/apple-touch-icon.png")
+    async def pwa_apple_icon():
+        return _static_file("apple-touch-icon.png", "image/png")
+
+    @app.get("/apple-touch-icon-precomposed.png")
+    async def pwa_apple_icon_precomposed():
+        return _static_file("apple-touch-icon.png", "image/png")
+
+    @app.get("/favicon.png")
+    async def pwa_favicon_png():
+        return _static_file("favicon.png", "image/png")
+
+    @app.get("/favicon.ico")
+    async def pwa_favicon_ico():
+        ico = SCRIPT_DIR / "tradutor.ico"
+        if ico.exists():
+            return FileResponse(ico, media_type="image/x-icon")
+        return _static_file("favicon.png", "image/png")
 
     @app.get("/health")
     async def health():
@@ -543,6 +624,54 @@ A tela em espanhol abre automaticamente.</div>
         """Tira a letra dos displays — volta pro modo tradução normal."""
         await hub.broadcast({"type": "song-hide"})
         return {"ok": True}
+
+    # ===== Boletim do culto (ordem do culto) =====
+    @app.get("/api/bulletin")
+    async def api_bulletin_get():
+        """Boletim atual (já traduzido pro ES). A audiência busca isso ao abrir
+        o 'Programa'; o operador busca pra recarregar/editar."""
+        return current_bulletin["data"]
+
+    @app.post("/api/bulletin")
+    async def api_bulletin_set(request: Request):
+        """Operador define a ordem do culto. Recebe {raw}; faz parse, traduz os
+        rótulos + versículos pro ES, persiste e avisa os displays."""
+        body = await request.json()
+        raw = (body.get("raw") or "").strip()
+        parsed = bulletin_mod.parse_bulletin_text(raw)
+
+        def _translate():
+            return bulletin_mod.translate_bulletin(
+                parsed, lambda t: default_translator(t, "pt", "es"))
+
+        translated = await asyncio.to_thread(_translate)
+        data = dict(translated)
+        data["raw"] = raw
+        data["current_index"] = None
+        current_bulletin["data"] = data
+        await asyncio.to_thread(save_bulletin, data)
+        await hub.broadcast({"type": "bulletin-updated"})
+        return {"ok": True, "items": len(data.get("items", [])), "data": data}
+
+    @app.post("/api/bulletin/current")
+    async def api_bulletin_current(request: Request):
+        """Operador marca onde o culto está agora (índice do item, ou null pra
+        limpar). Avisa os displays pra destacar."""
+        body = await request.json()
+        idx = body.get("index", None)
+        if idx is not None:
+            try:
+                idx = int(idx)
+            except (TypeError, ValueError):
+                idx = None
+        data = current_bulletin["data"]
+        n = len(data.get("items", []))
+        if idx is not None and not (0 <= idx < n):
+            idx = None
+        data["current_index"] = idx
+        await asyncio.to_thread(save_bulletin, data)
+        await hub.broadcast({"type": "bulletin-current", "index": idx})
+        return {"ok": True, "current_index": idx}
 
     @app.get("/api/audience")
     async def api_audience():

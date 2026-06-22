@@ -4,6 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
 <title>Traducción en vivo</title>
+
+<!-- ===== PWA: instalável no celular ("Añadir a inicio") ===== -->
+<meta name="theme-color" content="#0b0b0c">
+<meta name="description" content="Traducción simultánea del culto en tiempo real (portugués → español).">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/favicon.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Traducción">
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -526,6 +538,145 @@ html::-webkit-scrollbar { display: none; }
   font-style: italic;
 }
 #wait-hint.hidden { display: none; }
+
+/* ====== Botão "Programa" (ordem do culto) — ao lado do "?" ====== */
+#program-btn {
+  position: fixed;
+  top: max(18px, env(safe-area-inset-top));
+  left: 62px;
+  width: 36px; height: 36px;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 50%;
+  color: var(--fg);
+  font-size: 16px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  z-index: 100;
+  user-select: none;
+  opacity: 0.55;
+  transition: opacity 0.2s, transform 0.15s;
+}
+#program-btn:hover, #program-btn:active { opacity: 1; transform: scale(1.08); }
+
+/* ====== Overlay do Programa (ordem do culto, em ES) ====== */
+#program-view {
+  position: fixed; inset: 0;
+  z-index: 200;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  background: radial-gradient(ellipse at top, #11203a 0%, #0b0b0c 62%);
+  padding: max(16px, env(safe-area-inset-top)) 6vw 16vh 6vw;
+  scroll-behavior: smooth;
+}
+#program-view.hidden { display: none; }
+#program-topbar {
+  position: sticky; top: 0;
+  display: flex; justify-content: flex-end;
+  padding-bottom: 8px;
+  z-index: 5;
+}
+#program-close {
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: var(--fg);
+  border-radius: 999px;
+  padding: 9px 18px;
+  font-family: "Inter", sans-serif;
+  font-size: 15px; font-weight: 700;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+#program-close:active { transform: scale(0.97); }
+#program-head { text-align: center; margin: 4px 0 22px; }
+.program-badge {
+  display: inline-block; font-family: "Inter", sans-serif;
+  font-size: clamp(12px, 2.6vw, 15px); font-weight: 700;
+  color: var(--accent); background: rgba(91,157,255,0.12);
+  border: 1px solid rgba(91,157,255,0.3);
+  padding: 4px 14px; border-radius: 999px; letter-spacing: 0.04em;
+}
+#program-church {
+  display: block; margin-top: 12px;
+  font-family: "Atkinson Hyperlegible", sans-serif; font-weight: 700;
+  font-size: clamp(18px, 4.4vw, 26px); color: var(--fg);
+}
+#program-date {
+  display: block; margin-top: 4px;
+  font-family: "Inter", sans-serif; font-size: clamp(13px, 2.8vw, 16px); color: var(--dim);
+}
+#program-list { max-width: 30em; margin: 0 auto; display: flex; flex-direction: column; gap: 2px; }
+.b-empty { text-align: center; color: var(--dim); font-style: italic; padding: 40px 0; font-family: "Inter", sans-serif; }
+.b-section {
+  margin-top: 22px; margin-bottom: 4px; padding-bottom: 6px;
+  font-family: "Atkinson Hyperlegible", sans-serif; font-weight: 700;
+  font-size: clamp(18px, 4vw, 24px); color: var(--accent);
+  border-bottom: 1px solid rgba(91,157,255,0.25);
+}
+.b-title {
+  margin-top: 18px; text-align: center;
+  font-family: "Atkinson Hyperlegible", sans-serif; font-weight: 700;
+  font-size: clamp(17px, 3.8vw, 22px); color: var(--fg);
+}
+.b-title .b-detail { display: block; font-family: "Inter", sans-serif; font-weight: 500; font-size: 0.8em; color: var(--dim); margin-top: 2px; }
+.b-verse {
+  margin: 8px 0; padding: 10px 14px;
+  background: rgba(255,255,255,0.03);
+  border-left: 3px solid rgba(251,191,36,0.5); border-radius: 8px;
+}
+.b-verse .vt { font-family: "Atkinson Hyperlegible", sans-serif; font-style: italic; font-size: clamp(16px, 3.4vw, 20px); color: var(--fg); line-height: 1.45; }
+.b-verse .vr { display: block; margin-top: 6px; font-family: "Inter", sans-serif; font-weight: 700; font-size: clamp(12px, 2.6vw, 14px); color: var(--pause); }
+.b-verse .vpt { display: block; margin-top: 6px; font-family: "Inter", sans-serif; font-size: clamp(12px, 2.5vw, 14px); color: var(--dim); opacity: 0.6; font-style: italic; }
+.b-item {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px;
+  padding: 9px 6px; border-radius: 8px;
+}
+.b-item .b-label { font-family: "Atkinson Hyperlegible", sans-serif; font-weight: 700; font-size: clamp(16px, 3.4vw, 20px); color: var(--fg); }
+.b-item .b-detail { font-family: "Inter", sans-serif; font-size: clamp(14px, 2.8vw, 16px); color: var(--dim); }
+.b-item.current, .b-title.current, .b-section.current {
+  background: rgba(91,157,255,0.14);
+  border-left: 3px solid var(--accent);
+  padding-left: 12px;
+}
+.b-now {
+  display: inline-block; margin-right: 8px;
+  font-family: "Inter", sans-serif; font-weight: 700; font-size: 0.6em;
+  color: #fff; background: var(--accent);
+  padding: 2px 9px; border-radius: 999px; vertical-align: middle;
+  letter-spacing: 0.05em; text-transform: uppercase;
+}
+#program-foot { text-align: center; margin-top: 8vh; color: var(--dim); font-family: "Inter", sans-serif; font-size: clamp(12px, 2.4vw, 15px); opacity: 0.5; }
+
+/* ====== Instalar app (PWA) — bloco dentro do welcome ====== */
+#install-block {
+  border-color: rgba(91,157,255,0.35) !important;
+  background: rgba(91,157,255,0.10) !important;
+}
+#install-block[hidden] { display: none; }
+#welcome-install {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 11px 20px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-family: "Atkinson Hyperlegible", sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(91,157,255,0.35);
+  transition: transform 0.15s;
+}
+#welcome-install:active { transform: scale(0.97); }
+#welcome-install[hidden] { display: none; }
+.ios-share-glyph { display: inline-block; }
 </style>
 </head>
 <body>
@@ -572,6 +723,23 @@ html::-webkit-scrollbar { display: none; }
           <span class="ins-detail">Toca dos veces en cualquier parte del texto para entrar o salir de pantalla completa.</span>
         </div>
       </div>
+
+      <div class="ins-block">
+        <div class="ins-icon">📋</div>
+        <div class="ins-text">
+          <strong>Ver el orden del culto</strong>
+          <span class="ins-detail">Toca <strong>📋 arriba a la izquierda</strong> para ver el programa de hoy (cánticos, lecturas y predicación) traducido al español.</span>
+        </div>
+      </div>
+
+      <div class="ins-block" id="install-block" hidden>
+        <div class="ins-icon">📲</div>
+        <div class="ins-text">
+          <strong>Instalá esta traducción como app</strong>
+          <span class="ins-detail" id="install-hint">Queda en tu pantalla de inicio y la abrís con un solo toque, sin escribir la dirección.</span>
+          <button id="welcome-install" type="button" hidden>📲 Instalar app</button>
+        </div>
+      </div>
     </div>
 
     <button id="welcome-close" type="button">Empezar a leer</button>
@@ -590,6 +758,7 @@ html::-webkit-scrollbar { display: none; }
 </header>
 
 <button id="help-btn" type="button" aria-label="Ver instrucciones" title="Ver instrucciones">?</button>
+<button id="program-btn" type="button" aria-label="Ver el orden del culto" title="Orden del culto">📋</button>
 
 <div id="empty">Esperando…</div>
 
@@ -612,6 +781,20 @@ html::-webkit-scrollbar { display: none; }
   </div>
   <div id="song-lines"></div>
   <div id="song-foot">▲ Desliza para leer en tu ritmo ▼</div>
+</div>
+
+<!-- Programa: ordem do culto traduzida (aberto pela audiência no botão 📋) -->
+<div id="program-view" class="hidden">
+  <div id="program-topbar">
+    <button id="program-close" type="button" aria-label="Cerrar el programa">✕ Cerrar</button>
+  </div>
+  <div id="program-head">
+    <span class="program-badge">📋 Orden del culto</span>
+    <span id="program-church"></span>
+    <span id="program-date"></span>
+  </div>
+  <div id="program-list"></div>
+  <div id="program-foot">— Iglesia Bautista Gracia y Paz —</div>
 </div>
 
 <script>
@@ -650,6 +833,62 @@ html::-webkit-scrollbar { display: none; }
   }
   welcomeClose.addEventListener("click", () => hideWelcome(true));
   helpBtn.addEventListener("click", showWelcome);
+
+  // ========================================
+  // PWA — instalar app + service worker
+  // ========================================
+  (function setupPWA() {
+    const isStandalone = window.matchMedia("(display-mode: standalone)").matches
+      || window.navigator.standalone === true;
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const installBlock = document.getElementById("install-block");
+    const installBtn   = document.getElementById("welcome-install");
+    const installHint  = document.getElementById("install-hint");
+    let deferredPrompt = null;
+
+    function reveal() { if (installBlock && !isStandalone) installBlock.hidden = false; }
+
+    // Android/Chrome: evento nativo de instalação
+    window.addEventListener("beforeinstallprompt", (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      if (installBtn) installBtn.hidden = false;
+      reveal();
+    });
+
+    if (installBtn) {
+      installBtn.addEventListener("click", async () => {
+        if (!deferredPrompt) return;
+        deferredPrompt.prompt();
+        try { await deferredPrompt.userChoice; } catch (_) {}
+        deferredPrompt = null;
+        installBtn.hidden = true;
+      });
+    }
+
+    window.addEventListener("appinstalled", () => {
+      if (installBlock) installBlock.hidden = true;
+    });
+
+    // iOS Safari: não tem beforeinstallprompt — mostra instrução manual
+    if (isIOS && !isStandalone) {
+      if (installBtn) installBtn.hidden = true;
+      if (installHint) {
+        installHint.innerHTML = "Tocá <strong>Compartir</strong> "
+          + "<span class=\"ios-share-glyph\">⬆️</span> abajo y luego "
+          + "<strong>“Añadir a pantalla de inicio”</strong>.";
+      }
+      reveal();
+    }
+
+    // Registra o service worker (necessário pra instalar no Android/Chrome)
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("/sw.js").catch((e) =>
+          console.warn("SW registro falhou:", e));
+      });
+    }
+  })();
 
   // ========================================
   // Refs DOM
@@ -695,6 +934,98 @@ html::-webkit-scrollbar { display: none; }
   function hideSong() {
     songView.classList.add("hidden");
   }
+
+  // ========================================
+  // Programa (ordem do culto) — overlay em ES
+  // ========================================
+  const programBtn    = document.getElementById("program-btn");
+  const programView   = document.getElementById("program-view");
+  const programClose   = document.getElementById("program-close");
+  const programList    = document.getElementById("program-list");
+  const programChurch  = document.getElementById("program-church");
+  const programDate    = document.getElementById("program-date");
+  let bulletinData = null;
+
+  function renderBulletin() {
+    if (!programList) return;
+    const d = bulletinData || {};
+    programChurch.textContent = d.title || "Igreja Batista Graça e Paz";
+    programDate.textContent = d.date_es || d.date_pt || "";
+    programList.innerHTML = "";
+    const items = Array.isArray(d.items) ? d.items : [];
+    if (!items.length) {
+      programList.innerHTML = '<div class="b-empty">El programa de hoy aún no está disponible.</div>';
+      return;
+    }
+    const cur = (typeof d.current_index === "number") ? d.current_index : -1;
+    items.forEach((it, i) => {
+      let el;
+      if (it.kind === "section") {
+        el = document.createElement("div");
+        el.className = "b-section";
+        el.textContent = it.label_es || it.label_pt || "";
+      } else if (it.kind === "title") {
+        el = document.createElement("div");
+        el.className = "b-title";
+        el.textContent = it.label_es || it.label_pt || "";
+        if (it.detail) {
+          const dd = document.createElement("span");
+          dd.className = "b-detail"; dd.textContent = it.detail;
+          el.appendChild(dd);
+        }
+      } else if (it.kind === "verse") {
+        el = document.createElement("div");
+        el.className = "b-verse";
+        const vt = document.createElement("span");
+        vt.className = "vt";
+        vt.textContent = "“" + (it.verse_es || it.verse_pt || "") + "”";
+        el.appendChild(vt);
+        if (it.ref_es || it.ref_pt) {
+          const vr = document.createElement("span");
+          vr.className = "vr"; vr.textContent = it.ref_es || it.ref_pt;
+          el.appendChild(vr);
+        }
+        if (it.verse_pt && it.verse_es) {
+          const vp = document.createElement("span");
+          vp.className = "vpt"; vp.textContent = "PT: " + it.verse_pt;
+          el.appendChild(vp);
+        }
+      } else {
+        el = document.createElement("div");
+        el.className = "b-item";
+        const lb = document.createElement("span");
+        lb.className = "b-label"; lb.textContent = it.label_es || it.label_pt || "";
+        el.appendChild(lb);
+        if (it.detail) {
+          const dd = document.createElement("span");
+          dd.className = "b-detail"; dd.textContent = it.detail;
+          el.appendChild(dd);
+        }
+      }
+      if (cur === i) {
+        el.classList.add("current");
+        const now = document.createElement("span");
+        now.className = "b-now"; now.textContent = "ahora";
+        el.prepend(now);
+      }
+      programList.appendChild(el);
+    });
+  }
+
+  async function openProgram() {
+    try {
+      const r = await fetch("/api/bulletin", { cache: "no-store" });
+      if (r.ok) bulletinData = await r.json();
+    } catch (_) {}
+    renderBulletin();
+    programView.classList.remove("hidden");
+    programView.scrollTo({ top: 0, behavior: "auto" });
+    const curEl = programList.querySelector(".current");
+    if (curEl) setTimeout(() => curEl.scrollIntoView({ behavior: "smooth", block: "center" }), 150);
+  }
+  function closeProgram() { programView.classList.add("hidden"); }
+  if (programBtn) programBtn.addEventListener("click", openProgram);
+  if (programClose) programClose.addEventListener("click", closeProgram);
 
   // ========================================
   // Config
@@ -925,6 +1256,11 @@ html::-webkit-scrollbar { display: none; }
           showSong(data);
         } else if (data.type === "song-hide") {
           hideSong();
+        } else if (data.type === "bulletin-current") {
+          if (bulletinData) bulletinData.current_index = data.index;
+          if (!programView.classList.contains("hidden")) renderBulletin();
+        } else if (data.type === "bulletin-updated") {
+          if (!programView.classList.contains("hidden")) openProgram();
         }
       } catch (e) {
         console.warn("display-v2 parse fail", e);
